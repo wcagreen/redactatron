@@ -1,12 +1,12 @@
 use eframe::egui;
 
 mod views {
-    pub mod home;
     pub mod editor;
+    pub mod home;
 }
 
-use views::home::HomePage;
 use views::editor::EditorPage;
+use views::home::HomePage;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AppView {
@@ -16,8 +16,7 @@ enum AppView {
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_maximized(false),
+        viewport: egui::ViewportBuilder::default().with_maximized(true),
         ..Default::default()
     };
 
@@ -87,7 +86,7 @@ impl eframe::App for RedactorApp {
                 if ui.button("About").clicked() {
                     self.show_about = !self.show_about;
                 }
-                
+
                 // Add back button when in editor view
                 if matches!(self.current_view, AppView::Editor) {
                     if ui.button("← Back to Home").clicked() {
