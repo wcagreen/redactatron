@@ -3361,6 +3361,8 @@ dependencies = [
 name = "redactor-core"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "image",
  "lopdf",
  "pdfium-render",
  "serde",
