@@ -31,6 +31,10 @@ pub struct EditorPage {
     show_export_success_dialog: bool,
     last_exported_filename: String,
     return_to_home: bool,
+    // DPI selection for PDF export
+    show_dpi_dialog: bool,
+    selected_dpi: f32,
+    pending_export_file: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug)]
@@ -67,6 +71,9 @@ impl EditorPage {
             show_export_success_dialog: false,
             last_exported_filename: String::new(),
             return_to_home: false,
+            show_dpi_dialog: false,
+            selected_dpi: 150.0,
+            pending_export_file: None,
         }
     }
 
@@ -107,6 +114,49 @@ impl EditorPage {
                     if ui.button("OK").clicked() {
                         self.show_no_redactions_dialog = false;
                     }
+                });
+        }
+
+        if self.show_dpi_dialog {
+            egui::Window::new("PDF Export Settings")
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+                .show(ctx, |ui| {
+                    ui.label("Select DPI level for PDF export:");
+                    ui.add_space(8.0);
+                    
+                    ui.label(egui::RichText::new("Default DPI: 150").italics());
+                    ui.label("• Higher DPI = Better quality but larger file size");
+                    ui.label("• Lower DPI = Smaller file size but reduced quality");
+                    
+                    ui.add_space(12.0);
+                    
+                    ui.horizontal(|ui| {
+                        ui.label("DPI:");
+                        ui.add(
+                            egui::Slider::new(&mut self.selected_dpi, 72.0..=600.0)
+                                .step_by(1.0)
+                                .show_value(true),
+                        );
+                    });
+                    
+                    ui.add_space(12.0);
+                    
+                    ui.horizontal(|ui| {
+                        if ui.button("Export").clicked() {
+                            if let Some(file) = self.pending_export_file.take() {
+                                if self.redact_and_export_pdf(&file, self.selected_dpi) {
+                                    self.show_export_success_dialog = true;
+                                }
+                            }
+                            self.show_dpi_dialog = false;
+                        }
+                        if ui.button("Cancel").clicked() {
+                            self.show_dpi_dialog = false;
+                            self.pending_export_file = None;
+                        }
+                    });
                 });
         }
 
@@ -1036,7 +1086,7 @@ impl EditorPage {
         });
     }
 
-    fn redact_and_export_pdf(&mut self, current_file: &PathBuf) -> bool {
+    fn redact_and_export_pdf(&mut self, current_file: &PathBuf, dpi: f32) -> bool {
         let redactions: Vec<RedactionBox> = self
             .redaction_areas
             .iter()
@@ -1065,7 +1115,7 @@ impl EditorPage {
                 &current_file.to_string_lossy(),
                 &save_path.to_string_lossy(),
                 redactions,
-                600.0, // 600 DPI for high quality
+                dpi,
             ) {
                 Ok(_) => {
                     self.last_exported_filename = save_path
@@ -1166,12 +1216,17 @@ impl EditorPage {
             .unwrap_or("")
             .to_lowercase();
 
+        // For PDFs, show DPI selection dialog
+        if matches!(extension.as_str(), "pdf" | "doc" | "docx") {
+            self.pending_export_file = Some(current_file);
+            self.show_dpi_dialog = true;
+            return;
+        }
+
+        // For images, export directly
         let export_success = if matches!(extension.as_str(), "jpg" | "jpeg" | "png" | "webp") {
             self.redact_and_export_image(&current_file)
-        } else if matches!(extension.as_str(), "pdf" | "doc" | "docx") {
-            self.redact_and_export_pdf(&current_file)
-        }
-        else {
+        } else {
             println!("Export not yet implemented for this file type");
             false
         };
