@@ -1,2 +1,2 @@
-# rusty-redactor
+# Redactatron
 Rust based redaction software. 
