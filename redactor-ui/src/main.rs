@@ -5,6 +5,12 @@ mod views {
     pub mod home;
 }
 
+mod renders {
+    pub mod pdf_renderer;
+    pub mod image_renderer;
+    pub mod doc_renderer;
+}
+
 use views::editor::EditorPage;
 use views::home::HomePage;
 
