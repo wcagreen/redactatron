@@ -1,6 +1,7 @@
 use eframe::egui;
 use egui::StrokeKind;
 use redactor_core::processors::pdf::{PdfEngine, SearchResult};
+use redactor_core::exporters::rasterized::{RasterizedPdfExporter, RedactionBox};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::collections::BTreeMap;
@@ -251,15 +252,6 @@ impl EditorPage {
         }
     }
 
-
-
-    fn is_pdf(&self, file_path: &PathBuf) -> bool {
-        file_path
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.to_lowercase() == "pdf")
-            .unwrap_or(false)
-    }
 
     fn render_search_results_panel(&mut self, ui: &mut egui::Ui) {
 
@@ -543,6 +535,14 @@ impl EditorPage {
                 ui.label(format!("Extension: {}", extension));
             }
         }
+    }
+
+    fn is_pdf(&self, file_path: &PathBuf) -> bool {
+        file_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_lowercase() == "pdf")
+            .unwrap_or(false)
     }
 
     fn render_pdf(&mut self, ui: &mut egui::Ui, file_path: &PathBuf, ctx: &egui::Context) {
@@ -1036,6 +1036,56 @@ impl EditorPage {
         });
     }
 
+    fn redact_and_export_pdf(&mut self, current_file: &PathBuf) -> bool {
+        let redactions: Vec<RedactionBox> = self
+            .redaction_areas
+            .iter()
+            .filter(|r| &r.file_path == current_file)
+            .map(|r| RedactionBox {
+                page_index: r.page_index.unwrap_or(0),
+                x: r.x,
+                y: r.y,
+                width: r.width,
+                height: r.height,
+            })
+            .collect();
+
+        if let Some(save_path) = rfd::FileDialog::new()
+            .set_file_name(format!(
+                "{}_redacted.pdf",
+                current_file
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("document")
+            ))
+            .add_filter("PDF Document", &["pdf"])
+            .save_file()
+        {
+            match RasterizedPdfExporter::export_with_redactions(
+                &current_file.to_string_lossy(),
+                &save_path.to_string_lossy(),
+                redactions,
+                600.0, // 600 DPI for high quality
+            ) {
+                Ok(_) => {
+                    self.last_exported_filename = save_path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("file")
+                        .to_string();
+                    true
+                }
+                Err(e) => {
+                    println!("Failed to export PDF: {}", e);
+                    false
+                }
+            }
+        } else {
+            false
+        }
+    }
+
+
     fn redact_and_export_image(&mut self, current_file: &PathBuf) -> bool {
         let img = match image::open(current_file) {
             Ok(img) => img,
@@ -1118,7 +1168,10 @@ impl EditorPage {
 
         let export_success = if matches!(extension.as_str(), "jpg" | "jpeg" | "png" | "webp") {
             self.redact_and_export_image(&current_file)
-        } else {
+        } else if matches!(extension.as_str(), "pdf" | "doc" | "docx") {
+            self.redact_and_export_pdf(&current_file)
+        }
+        else {
             println!("Export not yet implemented for this file type");
             false
         };
