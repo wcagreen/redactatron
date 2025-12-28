@@ -1,10 +1,12 @@
 use eframe::egui;
 use egui::StrokeKind;
-use redactor_core::processors::pdf::{PdfEngine, SearchResult};
+use redactor_core::processors::pdf::SearchResult;
 use redactor_core::exporters::rasterized::{RasterizedPdfExporter, RedactionBox};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::collections::BTreeMap;
+
+use crate::renders::{pdf_renderer::{self, PdfRenderState}, image_renderer, doc_renderer};
 
 pub struct EditorPage {
     files: Vec<PathBuf>,
@@ -22,9 +24,7 @@ pub struct EditorPage {
     hovered_redaction: Option<usize>,
     pending_delete: Option<usize>,
     // PDF state
-    pdf_engine: Option<PdfEngine>,
-    current_pdf_page: u16,
-    pdf_page_count: u16,
+    pdf_state: PdfRenderState,
     search_results: Vec<SearchResult>,
     // Export feedback
     show_no_redactions_dialog: bool,
@@ -63,9 +63,7 @@ impl EditorPage {
             redaction_mode: false,
             hovered_redaction: None,
             pending_delete: None,
-            pdf_engine: None,
-            current_pdf_page: 0,
-            pdf_page_count: 0,
+            pdf_state: PdfRenderState::new(),
             search_results: Vec::new(),
             show_no_redactions_dialog: false,
             show_export_success_dialog: false,
@@ -189,7 +187,7 @@ impl EditorPage {
 
         // Clear PDF engine if current file is PDF
         if self.is_pdf(&current_file) {
-            self.pdf_engine = None;
+            self.pdf_state.clear();
             self.search_results.clear();
         }
 
@@ -220,7 +218,7 @@ impl EditorPage {
         self.pan_offset = egui::Vec2::ZERO;
         self.drag_start = None;
         self.redaction_mode = false;
-        self.current_pdf_page = 0;
+        self.pdf_state.current_pdf_page = 0;
     }
 
     fn load_current_file(&mut self) {
@@ -231,13 +229,10 @@ impl EditorPage {
         let current_file = &self.files[self.current_file_index];
 
         if self.is_pdf(current_file) {
-            let mut engine = PdfEngine::new();
-            if let Ok(_) = engine.load_file(&current_file.to_string_lossy()) {
-                self.pdf_page_count = engine.page_count();
-                self.current_pdf_page = 0;
-                self.pdf_engine = Some(engine);
-                self.search_results.clear();
+            if !self.pdf_state.load_file(current_file) {
+                println!("Failed to load PDF file");
             }
+            self.search_results.clear();
         }
     }
 
@@ -274,14 +269,14 @@ impl EditorPage {
         };
 
         self.active_search_result = Some(idx);
-        self.current_pdf_page = result.page_index;
+        self.pdf_state.current_pdf_page = result.page_index;
 
         self.center_on_search_result(&result); 
         self.scroll_to_active_result = true;
     }
 
     fn center_on_search_result(&mut self, result: &SearchResult) {
-        if let Some(engine) = &self.pdf_engine {
+        if let Some(engine) = &self.pdf_state.pdf_engine {
             if let Ok((page_width, page_height)) =
                 engine.get_page_dimensions(result.page_index)
             {
@@ -454,7 +449,7 @@ impl EditorPage {
             self.redaction_areas
                 .iter()
                 .filter(|r| {
-                    &r.file_path == current_file && r.page_index == Some(self.current_pdf_page)
+                    &r.file_path == current_file && r.page_index == Some(self.pdf_state.current_pdf_page)
                 })
                 .count()
         } else {
@@ -492,7 +487,7 @@ impl EditorPage {
         if ui.button("Clear Current Page").clicked() {
             if self.is_pdf(current_file) {
                 self.redaction_areas.retain(|r| {
-                    &r.file_path != current_file || r.page_index != Some(self.current_pdf_page)
+                    &r.file_path != current_file || r.page_index != Some(self.pdf_state.current_pdf_page)
                 });
             } else {
                 self.redaction_areas
@@ -514,7 +509,7 @@ impl EditorPage {
     fn perform_search(&mut self) {
         self.search_results.clear();
 
-        if let Some(engine) = &self.pdf_engine {
+        if let Some(engine) = &self.pdf_state.pdf_engine {
             match engine.search(&self.search_query) {
                 Ok(results) => {
                     self.search_results = results;
@@ -577,15 +572,49 @@ impl EditorPage {
             .to_lowercase();
 
         match extension.as_str() {
-            "pdf" => self.render_pdf(ui, file_path, ctx),
-            "jpg" | "jpeg" | "png" | "gif" | "webp" => self.render_image(ui, file_path, ctx),
-            "doc" | "docx" => self.render_word_doc(ui, file_path),
+            "pdf" => {
+                if let Some(pdf_result) = pdf_renderer::render_pdf(
+                    &mut self.pdf_state,
+                    ui,
+                    file_path,
+                    ctx,
+                    &mut self.zoom,
+                    &mut self.pan_offset,
+                    self.redaction_mode,
+                    &mut self.texture_cache,
+                ) {
+                    // Draw redaction areas and search highlights on top of the PDF
+                    self.draw_search_highlights(ui, &pdf_result.image_rect);
+                    self.draw_redaction_areas(ui, file_path, &pdf_result.image_rect, &pdf_result.response, ctx);
+                    // Handle interactions (panning/redacting)
+                    self.handle_interaction(ui, file_path, &pdf_result.image_rect, &pdf_result.response);
+                }
+            },
+            "jpg" | "jpeg" | "png" | "gif" | "webp" => {
+                if let Some(image_result) = image_renderer::render_image(
+                    ui,
+                    ctx,
+                    file_path,
+                    &mut self.zoom,
+                    &mut self.pan_offset,
+                    self.redaction_mode,
+                    &mut self.texture_cache,
+                ) {
+                    // Draw redaction areas on top of the image
+                    self.draw_redaction_areas(ui, file_path, &image_result.image_rect, &image_result.response, ctx);
+                    // Handle interactions (panning/redacting)
+                    self.handle_interaction(ui, file_path, &image_result.image_rect, &image_result.response);
+                }
+            },
+            "doc" | "docx" => doc_renderer::render_word_doc(ui, file_path),
             _ => {
                 ui.label("Unsupported file format");
                 ui.label(format!("Extension: {}", extension));
             }
         }
     }
+
+
 
     fn is_pdf(&self, file_path: &PathBuf) -> bool {
         file_path
@@ -595,161 +624,14 @@ impl EditorPage {
             .unwrap_or(false)
     }
 
-    fn render_pdf(&mut self, ui: &mut egui::Ui, file_path: &PathBuf, ctx: &egui::Context) {
-        // Initialize PDF engine if needed
-        if self.pdf_engine.is_none() {
-            let mut engine = PdfEngine::new();
-            if let Ok(_) = engine.load_file(&file_path.to_string_lossy()) {
-                self.pdf_page_count = engine.page_count();
-                self.pdf_engine = Some(engine);
-            } else {
-                ui.colored_label(egui::Color32::RED, "Failed to load PDF");
-                return;
-            }
-        }
-
-        let page_count = self.pdf_page_count;
-
-        ui.vertical(|ui| {
-            // Page navigation and controls
-            ui.horizontal(|ui| {
-                ui.label("Page:");
-                if ui.button("◀").clicked() && self.current_pdf_page > 0 {
-                    self.current_pdf_page -= 1;
-                    self.pan_offset = egui::Vec2::ZERO;
-                }
-
-                ui.label(format!("{} / {}", self.current_pdf_page + 1, page_count));
-
-                if ui.button("▶").clicked() && self.current_pdf_page < page_count - 1 {
-                    self.current_pdf_page += 1;
-                    self.pan_offset = egui::Vec2::ZERO;
-                }
-
-                ui.separator();
-
-                // Zoom controls
-                ui.label("Zoom:");
-                if ui.button("➖").clicked() {
-                    self.zoom = (self.zoom - 0.1).max(0.5);
-                }
-                ui.label(format!("{:.0}%", self.zoom * 100.0));
-                if ui.button("➕").clicked() {
-                    self.zoom = (self.zoom + 0.1).min(3.0);
-                }
-                if ui.button("Reset").clicked() {
-                    self.zoom = 1.0;
-                    self.pan_offset = egui::Vec2::ZERO;
-                }
-
-                ui.separator();
-
-                if self.redaction_mode {
-                    ui.colored_label(
-                        egui::Color32::LIGHT_RED,
-                        "🖍️ REDACTION MODE - Drag to create boxes",
-                    );
-                } else {
-                    ui.label("🖐️ PAN MODE - Drag to move");
-                }
-            });
-
-            ui.separator();
-
-            // Render PDF page
-            let cache_key = (file_path.clone(), self.current_pdf_page);
-
-            if !self.texture_cache.contains_key(&cache_key) {
-                if let Some(engine) = &self.pdf_engine {
-                    match engine.render_page(self.current_pdf_page, 2.0) {
-                        Ok(img) => {
-                            let img_rgba = img.to_rgba8();
-                            let size = [img_rgba.width() as _, img_rgba.height() as _];
-                            let pixels = img_rgba.as_flat_samples();
-
-                            let color_image =
-                                egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
-
-                            let texture = ctx.load_texture(
-                                format!(
-                                    "{}_{}",
-                                    file_path.to_string_lossy(),
-                                    self.current_pdf_page
-                                ),
-                                color_image,
-                                Default::default(),
-                            );
-
-                            self.texture_cache.insert(cache_key.clone(), texture);
-                        }
-                        Err(e) => {
-                            ui.colored_label(
-                                egui::Color32::RED,
-                                format!("Failed to render page: {}", e),
-                            );
-                            return;
-                        }
-                    }
-                }
-            }
-
-            if let Some(texture) = self.texture_cache.get(&cache_key) {
-                let texture_id = texture.id();
-                let texture_size = texture.size_vec2();
-
-                self.render_pdf_page_with_highlights(ui, texture_id, texture_size, file_path, ctx);
-            }
-        });
-    }
-
-    fn render_pdf_page_with_highlights(
-        &mut self,
-        ui: &mut egui::Ui,
-        texture_id: egui::TextureId,
-        texture_size: egui::Vec2,
-        file_path: &PathBuf,
-        ctx: &egui::Context,
-    ) {
-        let scaled_size = texture_size * self.zoom;
-
-        let (rect, response) = ui.allocate_exact_size(scaled_size, egui::Sense::click_and_drag());
-
-        // Handle zoom with scroll wheel
-        if response.hovered() {
-            let scroll_delta = ctx.input(|i| i.smooth_scroll_delta.y);
-            if scroll_delta != 0.0 {
-                self.zoom = (self.zoom + scroll_delta * 0.001).clamp(0.5, 3.0);
-            }
-        }
-
-        let image_rect = egui::Rect::from_min_size(rect.min + self.pan_offset, scaled_size);
-
-        // Draw the PDF page
-        ui.painter().image(
-            texture_id,
-            image_rect,
-            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-            egui::Color32::WHITE,
-        );
-
-        // Highlight search results
-        self.draw_search_highlights(ui, &image_rect);
-
-        // Draw redaction areas
-        self.draw_redaction_areas(ui, file_path, &image_rect, &response, ctx);
-
-        // Handle interaction
-        self.handle_interaction(ui, file_path, &image_rect, &response);
-    }
-
     fn draw_search_highlights(&self, ui: &mut egui::Ui, image_rect: &egui::Rect) {
-        if let Some(engine) = &self.pdf_engine {
+        if let Some(engine) = &self.pdf_state.pdf_engine {
             for (idx, result) in self.search_results.iter().enumerate() {
-                if result.page_index == self.current_pdf_page {
+                if result.page_index == self.pdf_state.current_pdf_page {
                     let rect_bounds = result.rect;
 
                     if let Ok((page_width, page_height)) =
-                        engine.get_page_dimensions(self.current_pdf_page)
+                        engine.get_page_dimensions(self.pdf_state.current_pdf_page)
                     {
                         let page_width = page_width as f32;
                         let page_height = page_height as f32;
@@ -826,7 +708,7 @@ impl EditorPage {
         self.hovered_redaction = None;
 
         let current_page = if self.is_pdf(file_path) {
-            Some(self.current_pdf_page)
+            Some(self.pdf_state.current_pdf_page)
         } else {
             None
         };
@@ -976,114 +858,12 @@ impl EditorPage {
                 height,
                 file_path: file_path.clone(),
                 page_index: if self.is_pdf(file_path) {
-                    Some(self.current_pdf_page)
+                    Some(self.pdf_state.current_pdf_page)
                 } else {
                     None
                 },
             });
         }
-    }
-
-    fn render_image(&mut self, ui: &mut egui::Ui, file_path: &PathBuf, ctx: &egui::Context) {
-        let cache_key = (file_path.clone(), 0);
-
-        if !self.texture_cache.contains_key(&cache_key) {
-            match image::open(file_path) {
-                Ok(img) => {
-                    let img_rgba = img.to_rgba8();
-                    let size = [img_rgba.width() as _, img_rgba.height() as _];
-                    let pixels = img_rgba.as_flat_samples();
-
-                    let color_image =
-                        egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
-
-                    let texture = ctx.load_texture(
-                        file_path.to_string_lossy(),
-                        color_image,
-                        Default::default(),
-                    );
-
-                    self.texture_cache.insert(cache_key.clone(), texture);
-                }
-                Err(e) => {
-                    ui.colored_label(egui::Color32::RED, format!("Failed to load image: {}", e));
-                    return;
-                }
-            }
-        }
-
-        if let Some(texture) = self.texture_cache.get(&cache_key) {
-            let original_size = texture.size_vec2();
-            let texture_id = texture.id();
-            let scaled_size = original_size * self.zoom;
-
-            ui.vertical(|ui| {
-                ui.horizontal(|ui| {
-                    ui.label("Zoom:");
-                    if ui.button("➖").clicked() {
-                        self.zoom = (self.zoom - 0.1).max(0.1);
-                    }
-                    ui.label(format!("{:.0}%", self.zoom * 100.0));
-                    if ui.button("➕").clicked() {
-                        self.zoom = (self.zoom + 0.1).min(5.0);
-                    }
-                    if ui.button("Reset View").clicked() {
-                        self.zoom = 1.0;
-                        self.pan_offset = egui::Vec2::ZERO;
-                    }
-                    ui.separator();
-                    if self.redaction_mode {
-                        ui.colored_label(
-                            egui::Color32::LIGHT_RED,
-                            "🖍️ REDACTION MODE - Drag to create boxes",
-                        );
-                    } else {
-                        ui.label("🖐️ PAN MODE - Drag to move image");
-                    }
-                });
-
-                ui.separator();
-
-                let (rect, response) =
-                    ui.allocate_exact_size(scaled_size, egui::Sense::click_and_drag());
-
-                if response.hovered() {
-                    let scroll_delta = ctx.input(|i| i.smooth_scroll_delta.y);
-                    if scroll_delta != 0.0 {
-                        self.zoom = (self.zoom + scroll_delta * 0.001).clamp(0.1, 5.0);
-                    }
-                }
-
-                let image_rect = egui::Rect::from_min_size(rect.min + self.pan_offset, scaled_size);
-
-                ui.painter().image(
-                    texture_id,
-                    image_rect,
-                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                    egui::Color32::WHITE,
-                );
-
-                self.draw_redaction_areas(ui, file_path, &image_rect, &response, ctx);
-                self.handle_interaction(ui, file_path, &image_rect, &response);
-
-                ui.add_space(10.0);
-                ui.label(format!(
-                    "Original size: {}x{} pixels",
-                    original_size.x, original_size.y
-                ));
-            });
-        }
-    }
-
-    fn render_word_doc(&mut self, ui: &mut egui::Ui, file_path: &PathBuf) {
-        ui.vertical_centered(|ui| {
-            ui.add_space(50.0);
-            ui.label("📝 Word Document");
-            ui.label(file_path.display().to_string());
-            ui.add_space(20.0);
-            ui.label("Word document rendering will be implemented here");
-            ui.label("May need to convert to PDF first for rendering");
-        });
     }
 
     fn redact_and_export_pdf(&mut self, current_file: &PathBuf, dpi: f32) -> bool {
