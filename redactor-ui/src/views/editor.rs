@@ -3,6 +3,7 @@ use egui::StrokeKind;
 use redactor_core::processors::pdf::{PdfEngine, SearchResult};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::collections::BTreeMap;
 
 pub struct EditorPage {
     files: Vec<PathBuf>,
@@ -10,6 +11,8 @@ pub struct EditorPage {
     search_query: String,
     redaction_areas: Vec<RedactionArea>,
     texture_cache: HashMap<(PathBuf, u16), egui::TextureHandle>, // (path, page_index)
+    active_search_result: Option<usize>, // Active Search Results index
+    scroll_to_active_result: bool,
     // Image viewing state
     zoom: f32,
     pan_offset: egui::Vec2,
@@ -47,6 +50,8 @@ impl EditorPage {
             search_query: String::new(),
             redaction_areas: Vec::new(),
             texture_cache: HashMap::new(),
+            active_search_result: None,
+            scroll_to_active_result: false,
             zoom: 1.0,
             pan_offset: egui::Vec2::ZERO,
             drag_start: None,
@@ -185,6 +190,69 @@ impl EditorPage {
         }
     }
 
+    fn goto_next_match(&mut self) {
+    if self.search_results.is_empty() {
+        return;
+    }
+
+    let next = match self.active_search_result {
+        Some(i) if i + 1 < self.search_results.len() => i + 1,
+        _ => 0,
+    };
+
+    self.activate_search_result(next);
+    }
+
+    fn goto_prev_match(&mut self) {
+        if self.search_results.is_empty() {
+            return;
+        }
+
+        let prev = match self.active_search_result {
+            Some(i) if i > 0 => i - 1,
+            _ => self.search_results.len() - 1,
+        };
+
+        self.activate_search_result(prev);
+    }
+
+    fn activate_search_result(&mut self, idx: usize) {
+        let result = match self.search_results.get(idx) {
+            Some(r) => r.clone(),  
+            None => return,
+        };
+
+        self.active_search_result = Some(idx);
+        self.current_pdf_page = result.page_index;
+
+        self.center_on_search_result(&result); 
+        self.scroll_to_active_result = true;
+    }
+
+    fn center_on_search_result(&mut self, result: &SearchResult) {
+        if let Some(engine) = &self.pdf_engine {
+            if let Ok((page_width, page_height)) =
+                engine.get_page_dimensions(result.page_index)
+            {
+                let rect = result.rect;
+
+                let cx = rect.left().value as f32 + rect.width().value as f32 / 2.0;
+                let cy = rect.bottom().value as f32 + rect.height().value as f32 / 2.0;
+
+                let nx = cx / page_width as f32;
+                let ny = 1.0 - (cy / page_height as f32);
+
+                // negative pan pulls content into view
+                self.pan_offset = egui::vec2(
+                    -nx * 500.0 * self.zoom,
+                    -ny * 500.0 * self.zoom,
+                );
+            }
+        }
+    }
+
+
+
     fn is_pdf(&self, file_path: &PathBuf) -> bool {
         file_path
             .extension()
@@ -194,40 +262,83 @@ impl EditorPage {
     }
 
     fn render_search_results_panel(&mut self, ui: &mut egui::Ui) {
+
         ui.heading("Search Results");
         ui.separator();
 
         ui.label(format!("Found {} matches", self.search_results.len()));
         ui.add_space(8.0);
 
+        ui.horizontal(|ui| {
+
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui.button("▶").clicked() {
+                self.goto_next_match();
+            }
+            if ui.button("◀").clicked() {
+                self.goto_prev_match();
+            }
+        });
+    });
+
         egui::ScrollArea::vertical()
             .id_salt("right_search_results_scroll_area")
             .auto_shrink([false, false])
             .show(ui, |ui| {
+
+                let mut grouped: BTreeMap<u16, Vec<usize>> = BTreeMap::new();
+
+                // Building groups 
                 for (idx, result) in self.search_results.iter().enumerate() {
-                    let preview = if result.text.len() > 40 {
-                        format!("{}...", &result.text[..40])
-                    } else {
-                        result.text.clone()
-                    };
-
-                    let label = format!(
-                        "{}. Page {} — \"{}\"",
-                        idx + 1,
-                        result.page_index + 1,
-                        preview
-                    );
-
-                    if ui
-                        .selectable_label(result.page_index == self.current_pdf_page, label)
-                        .clicked()
-                    {
-                        self.current_pdf_page = result.page_index;
-                        self.pan_offset = egui::Vec2::ZERO;
-                    }
-
-                    ui.add_space(4.0);
+                    grouped
+                        .entry(result.page_index)
+                        .or_default()
+                        .push(idx);
                 }
+
+                // Rendering the groups
+                for (page_index, results) in grouped {
+                    ui.vertical(|ui| {
+                        ui.label(
+                            egui::RichText::new(format!("Page {}", page_index + 1))
+                                .strong()
+                                .size(14.0),
+                        );
+                        
+                        ui.add_space(4.0);
+
+                        for idx in results {
+                            let result = &self.search_results[idx];
+
+                            let preview = if result.text.len() > 40 {
+                                format!("{}...", &result.text[..40])
+                            } else {
+                                result.text.clone()
+                            };
+
+                            let response = ui
+                                .add(
+                                    egui::Button::selectable(
+                                        self.active_search_result == Some(idx),
+                                        format!("\"{}\"", preview),
+                                    )
+                                    .sense(egui::Sense::click()),
+                                );
+
+                            if self.active_search_result == Some(idx) && self.scroll_to_active_result {
+                                ui.scroll_to_rect(response.rect, Some(egui::Align::Center));
+                            }
+
+                            if response.clicked() {
+                                self.activate_search_result(idx);
+                            }
+                        }
+
+                        ui.add_space(8.0);
+                    });
+
+                }
+                self.scroll_to_active_result = false;
             });
     }
 
