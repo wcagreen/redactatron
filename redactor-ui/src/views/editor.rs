@@ -584,10 +584,6 @@ impl EditorPage {
             }
         }
 
-        if ui.button("Clear All Redactions").clicked() {
-            self.redaction_areas.clear();
-        }
-
         ui.add_space(10.0);
 
         if ui.button("💾 Export Redacted Document").clicked() {
