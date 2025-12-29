@@ -257,11 +257,9 @@ impl EditorPage {
 
         let current_file = self.files[self.current_file_index].clone();
 
-        // Clear PDF engine if current file is PDF
-        if self.is_pdf(&current_file) {
-            self.pdf_state.clear();
-            self.search_results.clear();
-        }
+        self.pdf_state.clear();
+        self.search_results.clear();
+        self.search_query.clear();
 
         self.redaction_areas
             .retain(|r| &r.file_path != &current_file);
