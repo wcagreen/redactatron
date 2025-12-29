@@ -32,4 +32,4 @@ target
 
 #/target
 
-/pdfium-win-x64
+*.dll
