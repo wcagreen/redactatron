@@ -140,4 +140,23 @@ Ensure pdfium binaries are installed:
 - Download from [pdfium-binaries](https://github.com/bblanchon/pdfium-binaries/releases)
 - Extract the binaries and add them to your system PATH
 
+### Checking Application Logs
+
+If you encounter issues, detailed logs are available to help diagnose problems:
+
+**Log File Location:**
+- **Windows**: `C:\Users\{YourUsername}\AppData\Local\redactatron\data\logs\redactor.log`
+- **macOS**: `~/Library/Application Support/redactatron/logs/redactor.log`
+- **Linux**: `~/.local/share/redactatron/logs/redactor.log`
+
+Or fallback location: `redactor.log` in your current working directory
+
+**To View Logs:**
+1. Navigate to the log file location above
+2. Open `redactor.log` with any text editor
+3. Look for error messages with timestamps to identify when issues occurred
+4. Share relevant log excerpts when reporting issues
+
+The logs contain detailed information about file loading, processing, conversions, and any errors encountered during document redaction.
+
 
