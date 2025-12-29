@@ -30,7 +30,7 @@ fn main() -> Result<(), eframe::Error> {
     };
 
     eframe::run_native(
-        "Rusty Redactor",
+        "Redactatron 9000",
         options,
         Box::new(|cc| {
             let ctx = cc.egui_ctx.clone();
@@ -89,7 +89,7 @@ impl eframe::App for RedactorApp {
         // Top panel with title and about button
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.vertical_centered(|ui| {
-                ui.heading(egui::RichText::new("Rusty Redactor").size(40.0));
+                ui.heading(egui::RichText::new("Redactatron 9000").size(40.0));
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.button("About").clicked() {
@@ -126,14 +126,14 @@ impl eframe::App for RedactorApp {
 
         // About window
         if self.show_about {
-            egui::Window::new("About Rusty Redactor")
+            egui::Window::new("About Redactatron")
                 .movable(false)
                 .collapsible(false)
                 .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
                 .show(ctx, |ui| {
-                    ui.label("Rusty Redactor v0.1.0");
+                    ui.label("Redactatron v0.1.0");
                     ui.separator();
-                    ui.label("A powerful file redaction tool built with Rust and egui.");
+                    ui.label("A redaction tool built with Rust and egui.");
                     ui.separator();
                     ui.label("Features:");
                     ui.label("  • Drag and drop file upload");
