@@ -10,8 +10,8 @@ mod renders {
     pub mod image_renderer;
 }
 
-mod logging;
 
+use redactor_core::utils::logging;
 use views::editor::EditorPage;
 use views::home::HomePage;
 

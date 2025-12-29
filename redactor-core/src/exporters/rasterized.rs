@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use image::{DynamicImage, GenericImageView};
 use lopdf::Document;
+use log::{debug, info};
 
 use crate::processors::pdf::PdfEngine;
 
@@ -29,16 +30,19 @@ impl RasterizedPdfExporter {
         redactions: Vec<RedactionBox>,
         dpi: f32,
     ) -> Result<()> {
+        info!("Starting rasterized PDF export: input={}, output={}, dpi={}, redaction_count={}", input_path, output_path, dpi, redactions.len());
         let mut engine = PdfEngine::new();
         engine.load_file(input_path)?;
 
         let page_count = engine.page_count();
         let scale_factor = dpi / 72.0; // Convert DPI to scale factor (72 DPI is standard)
+        debug!("Scale factor calculated: {}", scale_factor);
 
         let mut rasterized_pages = Vec::new();
 
         // Render all pages with redactions applied
         for page_idx in 0..page_count {
+            debug!("Processing page {} of {}", page_idx + 1, page_count);
             let mut rendered_img = engine.render_page(page_idx, scale_factor)?;
 
             // Apply redactions to this page
@@ -47,9 +51,11 @@ impl RasterizedPdfExporter {
             rasterized_pages.push(rendered_img);
         }
 
+        debug!("All {} pages rendered and redacted", page_count);
         // Create PDF from rasterized images
         Self::create_pdf_from_images(&rasterized_pages, output_path)?;
 
+        info!("Rasterized PDF export completed successfully: {}", output_path);
         Ok(())
     }
 
@@ -67,6 +73,12 @@ impl RasterizedPdfExporter {
             .filter(|r| r.page_index == page_index)
             .collect();
 
+        if page_redactions.is_empty() {
+            debug!("No redactions to apply for page {}", page_index);
+            return Ok(());
+        }
+
+        debug!("Applying {} redactions to page {}", page_redactions.len(), page_index);
         let mut img_rgba = img.to_rgba8();
 
         for redaction in page_redactions {
@@ -76,6 +88,7 @@ impl RasterizedPdfExporter {
             let w = (redaction.width * width as f32) as u32;
             let h = (redaction.height * height as f32) as u32;
 
+            debug!("Redacting area at ({},{}) size {}x{} on page {}", x, y, w, h, page_index);
             // Draw black rectangle over redacted area
             for py in y..(y + h).min(height) {
                 for px in x..(x + w).min(width) {
@@ -90,13 +103,16 @@ impl RasterizedPdfExporter {
 
     /// Create a PDF from a vector of images using lopdf
     fn create_pdf_from_images(images: &[DynamicImage], output_path: &str) -> Result<()> {
+        debug!("Creating PDF from {} rasterized images", images.len());
         let mut doc = Document::new();
 
         let mut page_ids = vec![];
 
         for (idx, img) in images.iter().enumerate() {
+            debug!("Processing image {}/{}", idx + 1, images.len());
             let img_rgb = img.to_rgb8();
             let (width, height) = img.dimensions();
+            debug!("Image dimensions: {}x{}", width, height);
 
             // Create image stream
             let image_stream = lopdf::Stream::new(Default::default(), img_rgb.to_vec());
@@ -159,8 +175,10 @@ impl RasterizedPdfExporter {
         doc.trailer.set("Root", catalog_id);
 
         // Save document
+        debug!("Saving PDF document to: {}", output_path);
         doc.save(output_path)
             .context("Failed to save PDF document")?;
+        info!("PDF document successfully saved with {} pages", images.len());
 
         Ok(())
     }

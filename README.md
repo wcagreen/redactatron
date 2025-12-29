@@ -6,7 +6,7 @@ A Rust-based document redaction desktop application that helps you safely remove
 
 Redactatron uses a visual marking and rasterization approach to ensure complete removal of sensitive content:
 
-1. **Load & Display**: Open a PDF, Word document (.docx), or image. Word documents are automatically converted to PDF for processing
+1. **Load & Display**: Open a PDF, Word document (.docx), or image. Word documents are automatically converted to PDF for processing using Pandoc
 2. **Mark Redactions**: Visually draw rectangles over sensitive content in the editor. You can mark multiple areas across multiple pages
 3. **Search & Navigate**: Use the search feature to find specific terms or phrases, then quickly navigate to and redact them
 4. **Review & Edit**: Delete individual redactions by right-clicking, or clear all redactions for a file
@@ -37,7 +37,8 @@ This is a workspace project with two main components:
 
 ## Prerequisites
 
-- **LibreOffice**: [Download and install](https://www.libreoffice.org/) for Word Document conversion
+- **Pandoc**: [Download and install](https://pandoc.org/installing.html) for Word Document conversion
+- **MiKTeX**: [Download and install](https://miktex.org/download) for PDF engine (pdflatex) - required by Pandoc for converting documents to PDF
 - **pdfium**: [Download pdfium binaries](https://github.com/bblanchon/pdfium-binaries/releases) and add to your system PATH
 
 **For building from source:**
@@ -51,7 +52,10 @@ This is a workspace project with two main components:
 
 1. Download the latest release from [GitHub Releases](https://github.com/wcagreen/redactatron/releases)
 2. Extract the executable
-3. Ensure LibreOffice and pdfium are installed and in your system PATH
+3. Ensure the following are installed and in your system PATH:
+   - Pandoc
+   - MiKTeX (for pdflatex PDF engine)
+   - pdfium binaries
 4. Run `Redactatron.exe` (Windows) or `./Redactatron` (macOS/Linux)
 
 ### Option 2: Build from Source
@@ -103,7 +107,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Credits
 
-- **LibreOffice**: Used for converting Word Documents to PDFs to enable proper rendering and redaction of document content. Users must install LibreOffice separately.
+- **Pandoc**: Used for converting Word Documents to PDFs to enable proper rendering and redaction of document content. Users must install Pandoc separately.
 - **pdfium**: PDF processing engine used by pdfium-render for rendering and manipulating PDF documents. Users must install pdfium binaries separately.
 
 ## Author
@@ -116,17 +120,17 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Troubleshooting
 
-### LibreOffice not found
-Make sure LibreOffice is installed on your system:
-- **Windows/macOS**: Download from [libreoffice.org](https://www.libreoffice.org)
-- **Linux**: Review [libreoffice Linux Installation Instructions ](https://www.libreoffice.org/get-help/install-howto/linux/)
+### Pandoc not found
+Make sure Pandoc is installed on your system:
+- **Windows/macOS/Linux**: Download from [pandoc.org/installing.html](https://pandoc.org/installing.html)
 
 If installed but not found, ensure it's in your system PATH or the application can locate it.
 
 ### Word Document fails to open or convert
-Word documents (.docx) are converted to PDF internally using LibreOffice. If conversion fails:
-- Verify LibreOffice is properly installed and accessible from the command line
-- Try opening the document in LibreOffice directly to ensure it's valid
+Word documents (.docx) are converted to PDF internally using Pandoc. If conversion fails:
+- Verify Pandoc is properly installed and accessible from the command line
+- Verify MiKTeX is installed (provides pdflatex engine required by Pandoc for PDF conversion): [Download MiKTeX](https://miktex.org/download)
+- Try converting the document with Pandoc directly to ensure it's valid: `pandoc input.docx -o output.pdf`
 - Check that the document doesn't have unusual formatting or corruption
 
 ### PDF fails to open or render

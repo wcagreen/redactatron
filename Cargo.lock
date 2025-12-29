@@ -3400,6 +3400,7 @@ name = "redactor-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "directories",
  "env_logger",
  "image",
  "log",
@@ -3415,7 +3416,6 @@ name = "redactor-ui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "directories",
  "eframe",
  "egui",
  "env_logger",
