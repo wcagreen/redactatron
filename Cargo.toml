@@ -6,6 +6,7 @@ resolver = "3"
 version = "0.1.0"
 authors = ["William Green"]
 edition = "2024"
+rust-version = "1.90.0"
 license = "MIT"
 repository = "https://github.com/wcagreen/rusty-redactor"
 

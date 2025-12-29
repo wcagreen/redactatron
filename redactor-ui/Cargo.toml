@@ -7,6 +7,10 @@ license.workspace = true
 repository.workspace = true
 description = "UI for Rusty Redactor."
 
+[[bin]]
+name = "Redactatron"
+path = "src/main.rs"
+
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
