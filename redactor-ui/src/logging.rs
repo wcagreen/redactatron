@@ -16,12 +16,14 @@ pub fn init() {
     // Configure env_logger to output to file
     let file_result = fs::OpenOptions::new()
         .create(true)
-        .append(true)
+        .write(true)
+        .truncate(true)
         .open(&log_path);
 
     match file_result {
         Ok(file) => {
             env_logger::Builder::from_default_env()
+                .filter_level(log::LevelFilter::Info)
                 .format_timestamp_millis()
                 .target(env_logger::Target::Pipe(Box::new(file)))
                 .init();
