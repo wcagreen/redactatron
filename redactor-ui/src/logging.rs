@@ -26,7 +26,7 @@ pub fn init() {
                 .target(env_logger::Target::Pipe(Box::new(file)))
                 .init();
 
-            log::info!("=== Rusty Redactor Started ===");
+            log::info!("=== Redactatron Started ===");
             log::info!("Log file: {}", log_path.display());
         }
         Err(e) => {
