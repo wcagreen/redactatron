@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::TempDir;
-use log::{warn, debug, error};
+use log::{debug, error, info};
 
 use crate::processors::pdf::PdfEngine;
 
@@ -15,7 +15,9 @@ pub struct DocConverter {
 impl DocConverter {
     /// Create a temporary directory for document conversions
     pub fn new() -> Result<Self> {
+        debug!("Initializing DocConverter with new temporary directory");
         let temp_dir = TempDir::new().context("Failed to create temporary directory")?;
+        info!("DocConverter temporary directory created at: {}", temp_dir.path().display());
         Ok(Self {
             temp_dir: Some(temp_dir),
         })
@@ -25,9 +27,11 @@ impl DocConverter {
     /// Returns the path to the generated PDF file
     pub fn convert_to_pdf(&self, input_path: &str) -> Result<PathBuf> {
         let input_path = Path::new(input_path);
+        info!("Starting document to PDF conversion: {}", input_path.display());
 
         // Validate input file
         if !input_path.exists() {
+            error!("Input file not found: {}", input_path.display());
             return Err(anyhow::anyhow!("Input file not found: {}", input_path.display()));
         }
 
@@ -37,52 +41,42 @@ impl DocConverter {
             .ok_or_else(|| anyhow::anyhow!("Temporary directory not available"))?
             .path();
 
-        // Try soffice first (should be in PATH now)
-        let mut output = Command::new("soffice")
-            .arg("--headless")
-            .arg("--convert-to")
-            .arg("pdf")
-            .arg("--outdir")
-            .arg(temp_path)
-            .arg(input_path)
-            .output();
-
-        // If soffice fails to execute, try full path
-        if output.is_err() {
-            warn!("soffice not found in PATH, trying full path...");
-            output = Command::new("C:\\Program Files\\LibreOffice\\program\\soffice.exe")
-                .arg("--headless")
-                .arg("--convert-to")
-                .arg("pdf")
-                .arg("--outdir")
-                .arg(temp_path)
-                .arg(input_path)
-                .output();
-        }
-
-        let output = output.context("Failed to execute LibreOffice. Ensure it's installed at C:\\Program Files\\LibreOffice or in your PATH")?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            error!("LibreOffice stderr: {}", stderr);
-            error!("LibreOffice stdout: {}", stdout);
-            return Err(anyhow::anyhow!(
-                "LibreOffice conversion failed.\nStderr: {}\nStdout: {}",
-                stderr, stdout
-            ));
-        }
-
-        // Construct the expected PDF output path
+        // Construct the output PDF path
         let pdf_filename = input_path
             .file_stem()
             .and_then(|s| s.to_str())
             .ok_or_else(|| anyhow::anyhow!("Invalid filename"))?;
+        let output_pdf_path = temp_path.join(format!("{}.pdf", pdf_filename));
 
-        let pdf_path = temp_path.join(format!("{}.pdf", pdf_filename));
+        // Use Pandoc to convert document to PDF
+        debug!("Invoking Pandoc with command: pandoc {} -o {} --pdf-engine=pdflatex", input_path.display(), output_pdf_path.display());
+        let output = Command::new("pandoc")
+            .arg(input_path)
+            .arg("-o")
+            .arg(&output_pdf_path)
+            .arg("--pdf-engine=pdflatex")
+            .output();
 
-        if !pdf_path.exists() {
-            error!("Expected PDF at: {}", pdf_path.display());
+
+
+        let output = output.context("Failed to execute Pandoc. Ensure Pandoc is installed and in your system PATH. Download from https://pandoc.org/installing.html")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            error!("Pandoc conversion failed with status: {}", output.status);
+            error!("Pandoc stderr: {}", stderr);
+            error!("Pandoc stdout: {}", stdout);
+            return Err(anyhow::anyhow!(
+                "Pandoc conversion failed.\nStderr: {}\nStdout: {}",
+                stderr, stdout
+            ));
+        }
+        debug!("Pandoc conversion completed successfully");
+
+        // Verify the PDF was created
+        if !output_pdf_path.exists() {
+            error!("Expected PDF at: {}", output_pdf_path.display());
             debug!("Temp directory contents:");
             if let Ok(entries) = std::fs::read_dir(temp_path) {
                 for entry in entries {
@@ -93,11 +87,12 @@ impl DocConverter {
             }
             return Err(anyhow::anyhow!(
                 "Conversion appeared to succeed but PDF file not found at: {}",
-                pdf_path.display()
+                output_pdf_path.display()
             ));
         }
 
-        Ok(pdf_path)
+        info!("Document successfully converted to PDF: {}", output_pdf_path.display());
+        Ok(output_pdf_path)
     }
 
     /// Get the temporary directory path

@@ -2,7 +2,40 @@ use std::fs;
 use std::path::PathBuf;
 use directories::ProjectDirs;
 
-/// Initialize logging to file
+/// Initialize logging to file and console with proper error handling
+/// 
+/// This function sets up the logging infrastructure for the Redactatron application.
+/// It attempts to create a log file in the platform-specific application data directory,
+/// with fallback to the current directory if that fails.
+/// 
+/// # Logging Configuration
+/// - **Format**: Includes millisecond precision timestamps
+/// - **Level**: Set to Info by default (can be overridden via `RUST_LOG` environment variable)
+/// - **Output**: File-based logging (console fallback if file creation fails)
+/// 
+/// # Environment Variables
+/// - `RUST_LOG`: Override the log level (e.g., `RUST_LOG=debug` for debug output)
+/// 
+/// # Example Usage
+/// In your main.rs:
+/// ```ignore
+/// fn main() {
+///     redactor_core::utils::logging::init();
+///     log::info!("Application started");
+/// }
+/// ```
+/// 
+/// # Log Levels Used Throughout the Crate
+/// - **ERROR**: Critical failures that require attention
+/// - **WARN**: Potential issues (currently not extensively used)
+/// - **INFO**: Major operations (file loads, conversions started/completed)
+/// - **DEBUG**: Detailed operational information (PDFium initialization, dimension calculations, etc.)
+/// 
+/// # Log File Location
+/// - **Windows**: `%APPDATA%/redactatron/logs/redactor.log`
+/// - **macOS**: `~/Library/Application Support/redactatron/logs/redactor.log`
+/// - **Linux**: `~/.local/share/redactatron/logs/redactor.log`
+/// - **Fallback**: `./redactor.log` in current directory
 pub fn init() {
     let log_path = get_log_file_path();
     

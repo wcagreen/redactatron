@@ -231,8 +231,10 @@ impl EditorPage {
                             ui.label("  • PDFium library is not properly installed (document converted but failed to load)");
                             ui.label("  • PDFium is not in the application directory or system PATH");
                         } else {
-                            ui.label("  • LibreOffice is not installed");
-                            ui.label("  • LibreOffice executable not found in system PATH");
+                            ui.label("  • Pandoc is not installed");
+                            ui.label("  • Pandoc executable not found in system PATH");
+                            ui.label("  • Pandoc is missing required PDF engine pdflatex.");
+                            ui.label("  • If pandoc is installed, please install a LaTeX distribution (e.g., TeX Live, MiKTeX)");
                         }
                         ui.label("  • Document file is corrupted or unsupported");
                         ui.label("  • Insufficient permissions to read the document");
@@ -309,6 +311,7 @@ impl EditorPage {
                     self.pdf_error_message = format!("Failed to convert document to PDF: {}", e);
                     self.is_document_conversion_error = true;
                     self.show_pdf_error_dialog = true;
+                    error!("{}", self.pdf_error_message);
                 }
             }
         } else if self.is_pdf(&current_file) {
@@ -319,6 +322,7 @@ impl EditorPage {
                     self.pdf_error_message = error_msg.clone();
                     self.is_document_conversion_error = false;
                     self.show_pdf_error_dialog = true;
+                    error!("{}", self.pdf_error_message);
                 }
             }
             self.search_results.clear();
