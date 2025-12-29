@@ -7,6 +7,7 @@ pub struct PdfRenderState {
     pub pdf_engine: Option<PdfEngine>,
     pub current_pdf_page: u16,
     pub pdf_page_count: u16,
+    pub pdf_error_message: Option<String>,
 }
 
 impl PdfRenderState {
@@ -15,6 +16,8 @@ impl PdfRenderState {
             pdf_engine: None,
             current_pdf_page: 0,
             pdf_page_count: 0,
+            pdf_error_message: None,
+
         }
     }
 
@@ -25,9 +28,13 @@ impl PdfRenderState {
                 self.pdf_page_count = engine.page_count();
                 self.current_pdf_page = 0;
                 self.pdf_engine = Some(engine);
+                self.pdf_error_message = None;
                 true
             }
-            Err(_) => false,
+            Err(e) => {
+                self.pdf_error_message = Some(e.to_string());
+                false
+            },
         }
     }
 

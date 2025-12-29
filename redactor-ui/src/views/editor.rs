@@ -35,6 +35,9 @@ pub struct EditorPage {
     show_dpi_dialog: bool,
     selected_dpi: f32,
     pending_export_file: Option<PathBuf>,
+    // PDFIUM error handling
+    show_pdf_error_dialog: bool,
+    pdf_error_message: String,
 }
 
 #[derive(Clone, Debug)]
@@ -49,7 +52,7 @@ struct RedactionArea {
 
 impl EditorPage {
     pub fn new(files: Vec<PathBuf>) -> Self {
-        Self {
+        let mut editor = Self {
             files,
             current_file_index: 0,
             search_query: String::new(),
@@ -72,7 +75,11 @@ impl EditorPage {
             show_dpi_dialog: false,
             selected_dpi: 150.0,
             pending_export_file: None,
-        }
+            show_pdf_error_dialog: false,
+            pdf_error_message: String::new(),
+        };
+        editor.load_current_file();
+        editor
     }
 
     pub fn update(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
@@ -176,6 +183,35 @@ impl EditorPage {
                     }
                 });
         }
+
+        if self.show_pdf_error_dialog {
+            egui::Window::new("PDF Error")
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+                .show(ctx, |ui| {
+                    ui.colored_label(egui::Color32::RED, "❌ An error occurred while rendering the PDF:");
+                    ui.add_space(8.0);
+
+                    // Dispay the error message in a scrollable area
+                    egui::ScrollArea::vertical()
+                        .id_salt("pdf_error_message_scroll_area")
+                        .max_height(150.0)
+                        .show(ui, |ui| {
+                            ui.label(&self.pdf_error_message);
+                        });
+                    
+                    ui.add_space(12.0);
+                    ui.label("This may be caused by:");
+                    ui.label("  • PDFium library not found or not properly installed");
+                    ui.label("  • Corrupted PDF file");
+                    ui.label("  • Incompatible PDF format");
+                    ui.add_space(12.0);
+                    if ui.button("OK").clicked() {
+                        self.show_pdf_error_dialog = false;
+                    }
+                });
+        }
     }
 
     fn remove_current_file(&mut self) {
@@ -231,6 +267,10 @@ impl EditorPage {
         if self.is_pdf(current_file) {
             if !self.pdf_state.load_file(current_file) {
                 println!("Failed to load PDF file");
+                if let Some(error_msg) = &self.pdf_state.pdf_error_message {
+                    self.pdf_error_message = error_msg.clone();
+                    self.show_pdf_error_dialog = true;
+                }
             }
             self.search_results.clear();
         }
