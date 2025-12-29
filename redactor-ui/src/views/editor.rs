@@ -226,8 +226,14 @@ impl EditorPage {
                     ui.label("This may be caused by:");
                     
                     if self.is_document_conversion_error {
-                        ui.label("  • LibreOffice is not installed");
-                        ui.label("  • LibreOffice executable not found in system PATH");
+                        // Check if the error message indicates a PDFium issue
+                        if self.pdf_error_message.contains("PDFium") || self.pdf_error_message.contains("pdfium") {
+                            ui.label("  • PDFium library is not properly installed (document converted but failed to load)");
+                            ui.label("  • PDFium is not in the application directory or system PATH");
+                        } else {
+                            ui.label("  • LibreOffice is not installed");
+                            ui.label("  • LibreOffice executable not found in system PATH");
+                        }
                         ui.label("  • Document file is corrupted or unsupported");
                         ui.label("  • Insufficient permissions to read the document");
                     } else {
@@ -744,7 +750,26 @@ impl EditorPage {
         
         // Load the converted PDF
         if !self.pdf_state.load_file(&pdf_path) {
-            return Err(anyhow::anyhow!("Failed to load converted PDF"));
+            // The conversion succeeded, but loading the PDF failed - likely a PDFium issue
+            let error_detail = self.pdf_state.pdf_error_message
+                .clone()
+                .unwrap_or_else(|| "Unknown error".to_string());
+            
+            // Check if it's a PDFium binding error to provide better guidance
+            if error_detail.contains("Failed to bind PDFium") {
+                return Err(anyhow::anyhow!(
+                    "Document was successfully converted to PDF, but PDFium is not properly installed.\n\n\
+                    Error: {}\n\n\
+                    Solution: Ensure PDFium library is available in the current directory or in your system PATH.",
+                    error_detail
+                ));
+            }
+            
+            return Err(anyhow::anyhow!(
+                "Document was successfully converted to PDF, but failed to load it.\n\n\
+                Error: {}",
+                error_detail
+            ));
         }
         
         // Store the converted PDF path for later export
