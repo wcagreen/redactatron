@@ -1,4 +1,5 @@
 use eframe::egui;
+use log::info;
 use std::path::PathBuf;
 
 pub struct HomePage {
@@ -69,7 +70,7 @@ impl HomePage {
                             .pick_files()
                         {
                             for path in paths {
-                                println!("Selected file: {}", path.display());
+                                info!("Selected file: {}", path.display());
                                 self.uploaded_files.push(path);
                             }
                         }
@@ -85,10 +86,10 @@ impl HomePage {
 
             ctx.input(|i| {
                 if !i.raw.dropped_files.is_empty() {
-                    println!("Files dropped: {} files", i.raw.dropped_files.len());
+                    info!("Files dropped: {} files", i.raw.dropped_files.len());
                     for file in &i.raw.dropped_files {
                         if let Some(path) = &file.path {
-                            println!("Dropped file: {}", path.display());
+                            info!("Dropped file: {}", path.display());
                             self.uploaded_files.push(path.clone());
                         }
                     }
@@ -127,7 +128,7 @@ impl HomePage {
                                 .min_size(egui::vec2(120.0, 34.0));
 
                         if ui.add_enabled(has_files, submit_btn).clicked() {
-                            println!(
+                            info!(
                                 "Submitting {} files for processing",
                                 self.uploaded_files.len()
                             );

@@ -12,6 +12,9 @@ serde.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 image.workspace = true
+anyhow.workspace = true
+log.workspace = true
+directories.workspace = true
 redactor-core.workspace = true
 env_logger = { workspace = true, features = ["auto-color", "humantime"] }
 eframe = "0.33.3"

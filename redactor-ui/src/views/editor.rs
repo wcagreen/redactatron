@@ -1,12 +1,15 @@
 use eframe::egui;
 use egui::StrokeKind;
 use redactor_core::processors::pdf::SearchResult;
+use redactor_core::processors::docs::DocConverter;
 use redactor_core::exporters::rasterized::{RasterizedPdfExporter, RedactionBox};
+use anyhow::Context;
+use log::{info, error};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::collections::BTreeMap;
 
-use crate::renders::{pdf_renderer::{self, PdfRenderState}, image_renderer, doc_renderer};
+use crate::renders::{pdf_renderer::{self, PdfRenderState}, image_renderer};
 
 pub struct EditorPage {
     files: Vec<PathBuf>,
@@ -38,6 +41,11 @@ pub struct EditorPage {
     // PDFIUM error handling
     show_pdf_error_dialog: bool,
     pdf_error_message: String,
+    is_document_conversion_error: bool,
+    // Document converter for .doc/.docx files
+    doc_converter: Option<DocConverter>,
+    // Track the actual PDF path (for converted documents, this differs from the original file path)
+    current_pdf_path: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug)]
@@ -77,6 +85,9 @@ impl EditorPage {
             pending_export_file: None,
             show_pdf_error_dialog: false,
             pdf_error_message: String::new(),
+            is_document_conversion_error: false,
+            doc_converter: None,
+            current_pdf_path: None,
         };
         editor.load_current_file();
         editor
@@ -185,15 +196,25 @@ impl EditorPage {
         }
 
         if self.show_pdf_error_dialog {
-            egui::Window::new("PDF Error")
+            egui::Window::new(if self.is_document_conversion_error {
+                "Document Conversion Error"
+            } else {
+                "PDF Error"
+            })
                 .collapsible(false)
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
                 .show(ctx, |ui| {
-                    ui.colored_label(egui::Color32::RED, "❌ An error occurred while rendering the PDF:");
+                    let title = if self.is_document_conversion_error {
+                        "❌ Failed to convert document to PDF:"
+                    } else {
+                        "❌ An error occurred while rendering the PDF:"
+                    };
+                    
+                    ui.colored_label(egui::Color32::RED, title);
                     ui.add_space(8.0);
 
-                    // Dispay the error message in a scrollable area
+                    // Display the error message in a scrollable area
                     egui::ScrollArea::vertical()
                         .id_salt("pdf_error_message_scroll_area")
                         .max_height(150.0)
@@ -203,9 +224,18 @@ impl EditorPage {
                     
                     ui.add_space(12.0);
                     ui.label("This may be caused by:");
-                    ui.label("  • PDFium library not found or not properly installed");
-                    ui.label("  • Corrupted PDF file");
-                    ui.label("  • Incompatible PDF format");
+                    
+                    if self.is_document_conversion_error {
+                        ui.label("  • LibreOffice is not installed");
+                        ui.label("  • LibreOffice executable not found in system PATH");
+                        ui.label("  • Document file is corrupted or unsupported");
+                        ui.label("  • Insufficient permissions to read the document");
+                    } else {
+                        ui.label("  • PDFium library not found or not properly installed");
+                        ui.label("  • Corrupted PDF file");
+                        ui.label("  • Incompatible PDF format");
+                    }
+                    
                     ui.add_space(12.0);
                     if ui.button("OK").clicked() {
                         self.show_pdf_error_dialog = false;
@@ -255,6 +285,7 @@ impl EditorPage {
         self.drag_start = None;
         self.redaction_mode = false;
         self.pdf_state.current_pdf_page = 0;
+        self.current_pdf_path = None;
     }
 
     fn load_current_file(&mut self) {
@@ -262,13 +293,27 @@ impl EditorPage {
             return;
         }
 
-        let current_file = &self.files[self.current_file_index];
+        let current_file = self.files[self.current_file_index].clone();
 
-        if self.is_pdf(current_file) {
-            if !self.pdf_state.load_file(current_file) {
-                println!("Failed to load PDF file");
+        // Check if it's a document that needs conversion
+        if self.is_document(&current_file) {
+            match self.convert_and_load_document(&current_file) {
+                Ok(_) => {
+                    self.search_results.clear();
+                }
+                Err(e) => {
+                    self.pdf_error_message = format!("Failed to convert document to PDF: {}", e);
+                    self.is_document_conversion_error = true;
+                    self.show_pdf_error_dialog = true;
+                }
+            }
+        } else if self.is_pdf(&current_file) {
+            self.current_pdf_path = None; // No conversion for native PDFs
+            if !self.pdf_state.load_file(&current_file) {
+                error!("Failed to load PDF file");
                 if let Some(error_msg) = &self.pdf_state.pdf_error_message {
                     self.pdf_error_message = error_msg.clone();
+                    self.is_document_conversion_error = false;
                     self.show_pdf_error_dialog = true;
                 }
             }
@@ -553,10 +598,10 @@ impl EditorPage {
             match engine.search(&self.search_query) {
                 Ok(results) => {
                     self.search_results = results;
-                    println!("Found {} search results", self.search_results.len());
+                    info!("Found {} search results", self.search_results.len());
                 }
                 Err(e) => {
-                    println!("Search error: {}", e);
+                    error!("Search error: {}", e);
                 }
             }
         }
@@ -646,7 +691,23 @@ impl EditorPage {
                     self.handle_interaction(ui, file_path, &image_result.image_rect, &image_result.response);
                 }
             },
-            "doc" | "docx" => doc_renderer::render_word_doc(ui, file_path),
+            "doc" | "docx" => {
+                // Documents are converted to PDF in load_current_file, so render as PDF
+                if let Some(pdf_result) = pdf_renderer::render_pdf(
+                    &mut self.pdf_state,
+                    ui,
+                    file_path,
+                    ctx,
+                    &mut self.zoom,
+                    &mut self.pan_offset,
+                    self.redaction_mode,
+                    &mut self.texture_cache,
+                ) {
+                    self.draw_search_highlights(ui, &pdf_result.image_rect);
+                    self.draw_redaction_areas(ui, file_path, &pdf_result.image_rect, &pdf_result.response, ctx);
+                    self.handle_interaction(ui, file_path, &pdf_result.image_rect, &pdf_result.response);
+                }
+            },
             _ => {
                 ui.label("Unsupported file format");
                 ui.label(format!("Extension: {}", extension));
@@ -662,6 +723,37 @@ impl EditorPage {
             .and_then(|e| e.to_str())
             .map(|e| e.to_lowercase() == "pdf")
             .unwrap_or(false)
+    }
+
+    fn is_document(&self, file_path: &PathBuf) -> bool {
+        file_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| {
+                let ext = e.to_lowercase();
+                ext == "doc" || ext == "docx"
+            })
+            .unwrap_or(false)
+    }
+
+    fn convert_and_load_document(&mut self, file_path: &PathBuf) -> anyhow::Result<()> {
+        // Create converter (or reuse existing one for the same file)
+        let converter = DocConverter::new().context("Failed to create document converter")?;
+        let pdf_path = converter.convert_to_pdf(file_path.to_str().unwrap())
+            .context("Failed to convert document to PDF")?;
+        
+        // Load the converted PDF
+        if !self.pdf_state.load_file(&pdf_path) {
+            return Err(anyhow::anyhow!("Failed to load converted PDF"));
+        }
+        
+        // Store the converted PDF path for later export
+        self.current_pdf_path = Some(pdf_path);
+        
+        // Store converter to keep temp directory alive
+        self.doc_converter = Some(converter);
+        
+        Ok(())
     }
 
     fn draw_search_highlights(&self, ui: &mut egui::Ui, image_rect: &egui::Rect) {
@@ -920,6 +1012,9 @@ impl EditorPage {
             })
             .collect();
 
+        // Use the converted PDF path if available (for .doc/.docx files), otherwise use the original path
+        let pdf_source_path = self.current_pdf_path.as_ref().unwrap_or(current_file);
+
         if let Some(save_path) = rfd::FileDialog::new()
             .set_file_name(format!(
                 "{}_redacted.pdf",
@@ -932,7 +1027,7 @@ impl EditorPage {
             .save_file()
         {
             match RasterizedPdfExporter::export_with_redactions(
-                &current_file.to_string_lossy(),
+                &pdf_source_path.to_string_lossy(),
                 &save_path.to_string_lossy(),
                 redactions,
                 dpi,
@@ -946,7 +1041,7 @@ impl EditorPage {
                     true
                 }
                 Err(e) => {
-                    println!("Failed to export PDF: {}", e);
+                    error!("Failed to export PDF: {}", e);
                     false
                 }
             }
@@ -960,7 +1055,7 @@ impl EditorPage {
         let img = match image::open(current_file) {
             Ok(img) => img,
             Err(e) => {
-                println!("Failed to load image for export: {}", e);
+                error!("Failed to load image for export: {}", e);
                 return false;
             }
         };
@@ -1008,7 +1103,7 @@ impl EditorPage {
                     true
                 }
                 Err(e) => {
-                    println!("Failed to save: {}", e);
+                    error!("Failed to save: {}", e);
                     false
                 }
             }
@@ -1047,7 +1142,7 @@ impl EditorPage {
         let export_success = if matches!(extension.as_str(), "jpg" | "jpeg" | "png" | "webp") {
             self.redact_and_export_image(&current_file)
         } else {
-            println!("Export not yet implemented for this file type");
+            error!("Export not yet implemented for this file type");
             false
         };
 
