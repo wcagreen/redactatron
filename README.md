@@ -108,10 +108,25 @@ After launching the application, you can perform the following actions:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Credits
 
-- **Pandoc**: Used for converting Word Documents to PDFs to enable proper rendering and redaction of document content. Users must install Pandoc separately.
-- **pdfium**: PDF processing engine used by pdfium-render for rendering and manipulating PDF documents. Users must install pdfium binaries separately.
+## Third-Party Tools (Optional)
+
+Redactatron can integrate with the following external tools **only if they are
+installed separately by the user**:
+
+- **PDFium** — required to enable PDF rendering and PDF redaction features.
+- **Pandoc** — required to enable DOCX → PDF conversion.
+- **LaTeX PDF engine** (such as **MiKTeX**) — required by Pandoc to generate PDF
+  output (any compatible LaTeX distribution may be used).
+
+These tools are **not distributed with Redactatron**.
+Redactatron merely invokes them if present on the system.
+Users must install these tools independently and are responsible for complying
+with their respective licenses.
+
+If none of the above tools are installed, Redactatron will operate in
+**image-only redaction mode**, which supports redaction of image files without
+PDF or document conversion capabilities.
 
 ## Author
 
