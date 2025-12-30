@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use image::{DynamicImage, GenericImageView};
-use lopdf::Document;
 use log::{debug, info};
+use lopdf::Document;
 
 use crate::processors::pdf::PdfEngine;
 
@@ -30,7 +30,13 @@ impl RasterizedPdfExporter {
         redactions: Vec<RedactionBox>,
         dpi: f32,
     ) -> Result<()> {
-        info!("Starting rasterized PDF export: input={}, output={}, dpi={}, redaction_count={}", input_path, output_path, dpi, redactions.len());
+        info!(
+            "Starting rasterized PDF export: input={}, output={}, dpi={}, redaction_count={}",
+            input_path,
+            output_path,
+            dpi,
+            redactions.len()
+        );
         let mut engine = PdfEngine::new();
         engine.load_file(input_path)?;
 
@@ -55,7 +61,10 @@ impl RasterizedPdfExporter {
         // Create PDF from rasterized images
         Self::create_pdf_from_images(&rasterized_pages, output_path)?;
 
-        info!("Rasterized PDF export completed successfully: {}", output_path);
+        info!(
+            "Rasterized PDF export completed successfully: {}",
+            output_path
+        );
         Ok(())
     }
 
@@ -78,7 +87,11 @@ impl RasterizedPdfExporter {
             return Ok(());
         }
 
-        debug!("Applying {} redactions to page {}", page_redactions.len(), page_index);
+        debug!(
+            "Applying {} redactions to page {}",
+            page_redactions.len(),
+            page_index
+        );
         let mut img_rgba = img.to_rgba8();
 
         for redaction in page_redactions {
@@ -88,7 +101,10 @@ impl RasterizedPdfExporter {
             let w = (redaction.width * width as f32) as u32;
             let h = (redaction.height * height as f32) as u32;
 
-            debug!("Redacting area at ({},{}) size {}x{} on page {}", x, y, w, h, page_index);
+            debug!(
+                "Redacting area at ({},{}) size {}x{} on page {}",
+                x, y, w, h, page_index
+            );
             // Draw black rectangle over redacted area
             for py in y..(y + h).min(height) {
                 for px in x..(x + w).min(width) {
@@ -128,10 +144,7 @@ impl RasterizedPdfExporter {
             let image_id = doc.add_object(image_stream);
 
             // Create content stream for page
-            let content = format!(
-                "q\n{} 0 0 {} 0 0 cm\n/Image{} Do\nQ\n",
-                width, height, idx
-            );
+            let content = format!("q\n{} 0 0 {} 0 0 cm\n/Image{} Do\nQ\n", width, height, idx);
             let content_stream = lopdf::Stream::new(Default::default(), content.into_bytes());
             let content_id = doc.add_object(content_stream);
 
@@ -140,7 +153,12 @@ impl RasterizedPdfExporter {
             page_dict.set("Type", "Page");
             page_dict.set(
                 "MediaBox",
-                vec![0.into(), 0.into(), (width as i32).into(), (height as i32).into()],
+                vec![
+                    0.into(),
+                    0.into(),
+                    (width as i32).into(),
+                    (height as i32).into(),
+                ],
             );
             page_dict.set("Contents", content_id);
 
@@ -158,7 +176,7 @@ impl RasterizedPdfExporter {
         // Create pages tree
         let mut pages_dict = lopdf::Dictionary::new();
         pages_dict.set("Type", "Pages");
-        
+
         // Convert ObjectIds to Objects for the Kids array
         let kids: Vec<lopdf::Object> = page_ids.into_iter().map(|id| id.into()).collect();
         pages_dict.set("Kids", kids);
@@ -178,7 +196,10 @@ impl RasterizedPdfExporter {
         debug!("Saving PDF document to: {}", output_path);
         doc.save(output_path)
             .context("Failed to save PDF document")?;
-        info!("PDF document successfully saved with {} pages", images.len());
+        info!(
+            "PDF document successfully saved with {} pages",
+            images.len()
+        );
 
         Ok(())
     }

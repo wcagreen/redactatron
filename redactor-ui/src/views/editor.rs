@@ -1,15 +1,18 @@
+use anyhow::Context;
 use eframe::egui;
 use egui::StrokeKind;
-use redactor_core::processors::pdf::SearchResult;
-use redactor_core::processors::docs::DocConverter;
+use log::{error, info};
 use redactor_core::exporters::rasterized::{RasterizedPdfExporter, RedactionBox};
-use anyhow::Context;
-use log::{info, error};
+use redactor_core::processors::docs::DocConverter;
+use redactor_core::processors::pdf::SearchResult;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::collections::BTreeMap;
 
-use crate::renders::{pdf_renderer::{self, PdfRenderState}, image_renderer};
+use crate::renders::{
+    image_renderer,
+    pdf_renderer::{self, PdfRenderState},
+};
 
 pub struct EditorPage {
     files: Vec<PathBuf>,
@@ -17,7 +20,7 @@ pub struct EditorPage {
     search_query: String,
     redaction_areas: Vec<RedactionArea>,
     texture_cache: HashMap<(PathBuf, u16), egui::TextureHandle>, // (path, page_index)
-    active_search_result: Option<usize>, // Active Search Results index
+    active_search_result: Option<usize>,                         // Active Search Results index
     scroll_to_active_result: bool,
     // Image viewing state
     zoom: f32,
@@ -141,13 +144,13 @@ impl EditorPage {
                 .show(ctx, |ui| {
                     ui.label("Select DPI level for PDF export:");
                     ui.add_space(8.0);
-                    
+
                     ui.label(egui::RichText::new("Default DPI: 150").italics());
                     ui.label("• Higher DPI = Better quality but larger file size");
                     ui.label("• Lower DPI = Smaller file size but reduced quality");
-                    
+
                     ui.add_space(12.0);
-                    
+
                     ui.horizontal(|ui| {
                         ui.label("DPI:");
                         ui.add(
@@ -156,9 +159,9 @@ impl EditorPage {
                                 .show_value(true),
                         );
                     });
-                    
+
                     ui.add_space(12.0);
-                    
+
                     ui.horizontal(|ui| {
                         if ui.button("Export").clicked() {
                             if let Some(file) = self.pending_export_file.take() {
@@ -330,16 +333,16 @@ impl EditorPage {
     }
 
     fn goto_next_match(&mut self) {
-    if self.search_results.is_empty() {
-        return;
-    }
+        if self.search_results.is_empty() {
+            return;
+        }
 
-    let next = match self.active_search_result {
-        Some(i) if i + 1 < self.search_results.len() => i + 1,
-        _ => 0,
-    };
+        let next = match self.active_search_result {
+            Some(i) if i + 1 < self.search_results.len() => i + 1,
+            _ => 0,
+        };
 
-    self.activate_search_result(next);
+        self.activate_search_result(next);
     }
 
     fn goto_prev_match(&mut self) {
@@ -357,22 +360,20 @@ impl EditorPage {
 
     fn activate_search_result(&mut self, idx: usize) {
         let result = match self.search_results.get(idx) {
-            Some(r) => r.clone(),  
+            Some(r) => r.clone(),
             None => return,
         };
 
         self.active_search_result = Some(idx);
         self.pdf_state.current_pdf_page = result.page_index;
 
-        self.center_on_search_result(&result); 
+        self.center_on_search_result(&result);
         self.scroll_to_active_result = true;
     }
 
     fn center_on_search_result(&mut self, result: &SearchResult) {
         if let Some(engine) = &self.pdf_state.pdf_engine {
-            if let Ok((page_width, page_height)) =
-                engine.get_page_dimensions(result.page_index)
-            {
+            if let Ok((page_width, page_height)) = engine.get_page_dimensions(result.page_index) {
                 let rect = result.rect;
 
                 let cx = rect.left().value as f32 + rect.width().value as f32 / 2.0;
@@ -382,17 +383,12 @@ impl EditorPage {
                 let ny = 1.0 - (cy / page_height as f32);
 
                 // negative pan pulls content into view
-                self.pan_offset = egui::vec2(
-                    -nx * 500.0 * self.zoom,
-                    -ny * 500.0 * self.zoom,
-                );
+                self.pan_offset = egui::vec2(-nx * 500.0 * self.zoom, -ny * 500.0 * self.zoom);
             }
         }
     }
 
-
     fn render_search_results_panel(&mut self, ui: &mut egui::Ui) {
-
         ui.heading("Search Results");
         ui.separator();
 
@@ -400,30 +396,25 @@ impl EditorPage {
         ui.add_space(8.0);
 
         ui.horizontal(|ui| {
-
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.button("▶").clicked() {
-                self.goto_next_match();
-            }
-            if ui.button("◀").clicked() {
-                self.goto_prev_match();
-            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("▶").clicked() {
+                    self.goto_next_match();
+                }
+                if ui.button("◀").clicked() {
+                    self.goto_prev_match();
+                }
+            });
         });
-    });
 
         egui::ScrollArea::vertical()
             .id_salt("right_search_results_scroll_area")
             .auto_shrink([false, false])
             .show(ui, |ui| {
-
                 let mut grouped: BTreeMap<u16, Vec<usize>> = BTreeMap::new();
 
-                // Building groups 
+                // Building groups
                 for (idx, result) in self.search_results.iter().enumerate() {
-                    grouped
-                        .entry(result.page_index)
-                        .or_default()
-                        .push(idx);
+                    grouped.entry(result.page_index).or_default().push(idx);
                 }
 
                 // Rendering the groups
@@ -434,7 +425,7 @@ impl EditorPage {
                                 .strong()
                                 .size(14.0),
                         );
-                        
+
                         ui.add_space(4.0);
 
                         for idx in results {
@@ -446,16 +437,17 @@ impl EditorPage {
                                 result.text.clone()
                             };
 
-                            let response = ui
-                                .add(
-                                    egui::Button::selectable(
-                                        self.active_search_result == Some(idx),
-                                        format!("\"{}\"", preview),
-                                    )
-                                    .sense(egui::Sense::click()),
-                                );
+                            let response = ui.add(
+                                egui::Button::selectable(
+                                    self.active_search_result == Some(idx),
+                                    format!("\"{}\"", preview),
+                                )
+                                .sense(egui::Sense::click()),
+                            );
 
-                            if self.active_search_result == Some(idx) && self.scroll_to_active_result {
+                            if self.active_search_result == Some(idx)
+                                && self.scroll_to_active_result
+                            {
                                 ui.scroll_to_rect(response.rect, Some(egui::Align::Center));
                             }
 
@@ -466,7 +458,6 @@ impl EditorPage {
 
                         ui.add_space(8.0);
                     });
-
                 }
                 self.scroll_to_active_result = false;
             });
@@ -542,7 +533,8 @@ impl EditorPage {
             self.redaction_areas
                 .iter()
                 .filter(|r| {
-                    &r.file_path == current_file && r.page_index == Some(self.pdf_state.current_pdf_page)
+                    &r.file_path == current_file
+                        && r.page_index == Some(self.pdf_state.current_pdf_page)
                 })
                 .count()
         } else {
@@ -580,7 +572,8 @@ impl EditorPage {
         if ui.button("Clear Current Page").clicked() {
             if self.is_pdf(current_file) {
                 self.redaction_areas.retain(|r| {
-                    &r.file_path != current_file || r.page_index != Some(self.pdf_state.current_pdf_page)
+                    &r.file_path != current_file
+                        || r.page_index != Some(self.pdf_state.current_pdf_page)
                 });
             } else {
                 self.redaction_areas
@@ -674,11 +667,22 @@ impl EditorPage {
                 ) {
                     // Draw redaction areas and search highlights on top of the PDF
                     self.draw_search_highlights(ui, &pdf_result.image_rect);
-                    self.draw_redaction_areas(ui, file_path, &pdf_result.image_rect, &pdf_result.response, ctx);
+                    self.draw_redaction_areas(
+                        ui,
+                        file_path,
+                        &pdf_result.image_rect,
+                        &pdf_result.response,
+                        ctx,
+                    );
                     // Handle interactions (panning/redacting)
-                    self.handle_interaction(ui, file_path, &pdf_result.image_rect, &pdf_result.response);
+                    self.handle_interaction(
+                        ui,
+                        file_path,
+                        &pdf_result.image_rect,
+                        &pdf_result.response,
+                    );
                 }
-            },
+            }
             "jpg" | "jpeg" | "png" | "gif" | "webp" => {
                 if let Some(image_result) = image_renderer::render_image(
                     ui,
@@ -690,11 +694,22 @@ impl EditorPage {
                     &mut self.texture_cache,
                 ) {
                     // Draw redaction areas on top of the image
-                    self.draw_redaction_areas(ui, file_path, &image_result.image_rect, &image_result.response, ctx);
+                    self.draw_redaction_areas(
+                        ui,
+                        file_path,
+                        &image_result.image_rect,
+                        &image_result.response,
+                        ctx,
+                    );
                     // Handle interactions (panning/redacting)
-                    self.handle_interaction(ui, file_path, &image_result.image_rect, &image_result.response);
+                    self.handle_interaction(
+                        ui,
+                        file_path,
+                        &image_result.image_rect,
+                        &image_result.response,
+                    );
                 }
-            },
+            }
             "doc" | "docx" => {
                 // Documents are converted to PDF in load_current_file, so render as PDF
                 if let Some(pdf_result) = pdf_renderer::render_pdf(
@@ -708,18 +723,27 @@ impl EditorPage {
                     &mut self.texture_cache,
                 ) {
                     self.draw_search_highlights(ui, &pdf_result.image_rect);
-                    self.draw_redaction_areas(ui, file_path, &pdf_result.image_rect, &pdf_result.response, ctx);
-                    self.handle_interaction(ui, file_path, &pdf_result.image_rect, &pdf_result.response);
+                    self.draw_redaction_areas(
+                        ui,
+                        file_path,
+                        &pdf_result.image_rect,
+                        &pdf_result.response,
+                        ctx,
+                    );
+                    self.handle_interaction(
+                        ui,
+                        file_path,
+                        &pdf_result.image_rect,
+                        &pdf_result.response,
+                    );
                 }
-            },
+            }
             _ => {
                 ui.label("Unsupported file format");
                 ui.label(format!("Extension: {}", extension));
             }
         }
     }
-
-
 
     fn is_pdf(&self, file_path: &PathBuf) -> bool {
         file_path
@@ -743,16 +767,19 @@ impl EditorPage {
     fn convert_and_load_document(&mut self, file_path: &PathBuf) -> anyhow::Result<()> {
         // Create converter (or reuse existing one for the same file)
         let converter = DocConverter::new().context("Failed to create document converter")?;
-        let pdf_path = converter.convert_to_pdf(file_path.to_str().unwrap())
+        let pdf_path = converter
+            .convert_to_pdf(file_path.to_str().unwrap())
             .context("Failed to convert document to PDF")?;
-        
+
         // Load the converted PDF
         if !self.pdf_state.load_file(&pdf_path) {
             // The conversion succeeded, but loading the PDF failed - likely a PDFium issue
-            let error_detail = self.pdf_state.pdf_error_message
+            let error_detail = self
+                .pdf_state
+                .pdf_error_message
                 .clone()
                 .unwrap_or_else(|| "Unknown error".to_string());
-            
+
             // Check if it's a PDFium binding error to provide better guidance
             if error_detail.contains("Failed to bind PDFium") {
                 return Err(anyhow::anyhow!(
@@ -762,20 +789,20 @@ impl EditorPage {
                     error_detail
                 ));
             }
-            
+
             return Err(anyhow::anyhow!(
                 "Document was successfully converted to PDF, but failed to load it.\n\n\
                 Error: {}",
                 error_detail
             ));
         }
-        
+
         // Store the converted PDF path for later export
         self.current_pdf_path = Some(pdf_path);
-        
+
         // Store converter to keep temp directory alive
         self.doc_converter = Some(converter);
-        
+
         Ok(())
     }
 
@@ -1072,7 +1099,6 @@ impl EditorPage {
             false
         }
     }
-
 
     fn redact_and_export_image(&mut self, current_file: &PathBuf) -> bool {
         let img = match image::open(current_file) {

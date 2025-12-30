@@ -6,10 +6,9 @@ mod views {
 }
 
 mod renders {
-    pub mod pdf_renderer;
     pub mod image_renderer;
+    pub mod pdf_renderer;
 }
-
 
 use redactor_core::utils::logging;
 use views::editor::EditorPage;
@@ -23,7 +22,7 @@ enum AppView {
 
 fn main() -> Result<(), eframe::Error> {
     logging::init();
-    
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_maximized(true),
         ..Default::default()

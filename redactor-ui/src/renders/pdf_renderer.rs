@@ -1,7 +1,7 @@
-use redactor_core::processors::pdf::PdfEngine;
-use std::path::PathBuf;
 use eframe::egui;
+use redactor_core::processors::pdf::PdfEngine;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 pub struct PdfRenderState {
     pub pdf_engine: Option<PdfEngine>,
@@ -17,7 +17,6 @@ impl PdfRenderState {
             current_pdf_page: 0,
             pdf_page_count: 0,
             pdf_error_message: None,
-
         }
     }
 
@@ -34,7 +33,7 @@ impl PdfRenderState {
             Err(e) => {
                 self.pdf_error_message = Some(e.to_string());
                 false
-            },
+            }
         }
     }
 
@@ -165,7 +164,8 @@ pub fn render_pdf(
         } else {
             None
         }
-    }).inner
+    })
+    .inner
 }
 
 pub fn render_pdf_page_with_highlights(
@@ -203,5 +203,3 @@ pub fn render_pdf_page_with_highlights(
         response: response.clone(),
     })
 }
-
-

@@ -1,12 +1,11 @@
+use pdfium_render::prelude::{PdfPoints, PdfRect};
 use redactor_core::processors::pdf::{PdfEngine, SearchResult};
-use pdfium_render::prelude::{PdfRect, PdfPoints};
 
 #[test]
 fn test_pdf_engine_creation() {
     let engine = PdfEngine::new();
     assert_eq!(engine.page_count(), 0);
 }
-
 
 #[test]
 fn test_search_result_creation() {
@@ -23,4 +22,3 @@ fn test_search_result_creation() {
     assert_eq!(search_result.page_index, 1);
     assert_eq!(search_result.text, "test");
 }
-

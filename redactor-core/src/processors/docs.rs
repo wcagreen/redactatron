@@ -1,11 +1,10 @@
 use anyhow::{Context, Result};
+use log::{debug, error, info};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::TempDir;
-use log::{debug, error, info};
 
 use crate::processors::pdf::PdfEngine;
-
 
 // Temp directory for document conversions
 pub struct DocConverter {
@@ -17,7 +16,10 @@ impl DocConverter {
     pub fn new() -> Result<Self> {
         debug!("Initializing DocConverter with new temporary directory");
         let temp_dir = TempDir::new().context("Failed to create temporary directory")?;
-        info!("DocConverter temporary directory created at: {}", temp_dir.path().display());
+        info!(
+            "DocConverter temporary directory created at: {}",
+            temp_dir.path().display()
+        );
         Ok(Self {
             temp_dir: Some(temp_dir),
         })
@@ -27,12 +29,18 @@ impl DocConverter {
     /// Returns the path to the generated PDF file
     pub fn convert_to_pdf(&self, input_path: &str) -> Result<PathBuf> {
         let input_path = Path::new(input_path);
-        info!("Starting document to PDF conversion: {}", input_path.display());
+        info!(
+            "Starting document to PDF conversion: {}",
+            input_path.display()
+        );
 
         // Validate input file
         if !input_path.exists() {
             error!("Input file not found: {}", input_path.display());
-            return Err(anyhow::anyhow!("Input file not found: {}", input_path.display()));
+            return Err(anyhow::anyhow!(
+                "Input file not found: {}",
+                input_path.display()
+            ));
         }
 
         let temp_path = self
@@ -49,15 +57,17 @@ impl DocConverter {
         let output_pdf_path = temp_path.join(format!("{}.pdf", pdf_filename));
 
         // Use Pandoc to convert document to PDF
-        debug!("Invoking Pandoc with command: pandoc {} -o {} --pdf-engine=pdflatex", input_path.display(), output_pdf_path.display());
+        debug!(
+            "Invoking Pandoc with command: pandoc {} -o {} --pdf-engine=pdflatex",
+            input_path.display(),
+            output_pdf_path.display()
+        );
         let output = Command::new("pandoc")
             .arg(input_path)
             .arg("-o")
             .arg(&output_pdf_path)
             .arg("--pdf-engine=pdflatex")
             .output();
-
-
 
         let output = output.context("Failed to execute Pandoc. Ensure Pandoc is installed and in your system PATH. Download from https://pandoc.org/installing.html")?;
 
@@ -69,7 +79,8 @@ impl DocConverter {
             error!("Pandoc stdout: {}", stdout);
             return Err(anyhow::anyhow!(
                 "Pandoc conversion failed.\nStderr: {}\nStdout: {}",
-                stderr, stdout
+                stderr,
+                stdout
             ));
         }
         debug!("Pandoc conversion completed successfully");
@@ -91,7 +102,10 @@ impl DocConverter {
             ));
         }
 
-        info!("Document successfully converted to PDF: {}", output_pdf_path.display());
+        info!(
+            "Document successfully converted to PDF: {}",
+            output_pdf_path.display()
+        );
         Ok(output_pdf_path)
     }
 
@@ -110,8 +124,6 @@ impl Default for DocConverter {
         Self::new().expect("Failed to create default DocConverter")
     }
 }
-
-
 
 /// High-level document processor that handles document conversion and PDF operations
 pub struct DocumentProcessor;
@@ -134,4 +146,3 @@ impl DocumentProcessor {
         converter.convert_to_pdf(input_path)
     }
 }
-
