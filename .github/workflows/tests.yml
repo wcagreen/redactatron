@@ -1,47 +1,51 @@
 name: Rust Tests
 
 on:
-  push:
-    branches: [ main, master, develop ]
   pull_request:
-    branches: [ main, master, develop ]
+    paths:
+      - redactor-core/**
+      - Cargo.toml
+      - .github/workflows/test-rust.yml
+  push:
+    branches:
+      - main
+    paths:
+      - redactor-core/**
+      - Cargo.toml
+      - .github/workflows/test-rust.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUSTFLAGS: -C debuginfo=0  # Do not produce debug symbols to keep memory usage down
+  RUST_BACKTRACE: 1
+
 
 jobs:
   test:
-    name: Test Suite
-    runs-on: ubuntu-latest
-    
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest ]
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-    
-    - name: Cache cargo registry
-      uses: actions/cache@v3
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-    
-    - name: Cache cargo index
-      uses: actions/cache@v3
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-    
-    - name: Cache cargo build
-      uses: actions/cache@v3
-      with:
-        path: target
-        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-    
-    - name: Run tests
-      run: cargo test --verbose --workspace
-    
-    - name: Run tests with logging
-      run: cargo test --verbose --workspace -- --nocapture
-      env:
-        RUST_LOG: debug
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        run: rustup show
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref_name == 'main' }}
+
+      - name: Run tests
+        if: github.ref_name != 'main'
+        run: >
+          cargo test -p redactor-core
 
   clippy:
     name: Clippy

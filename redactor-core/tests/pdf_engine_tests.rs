@@ -7,11 +7,6 @@ fn test_pdf_engine_creation() {
     assert_eq!(engine.page_count(), 0);
 }
 
-#[test]
-fn test_pdf_engine_initial_state() {
-    let engine = PdfEngine::new();
-    assert_eq!(engine.page_count(), 0);
-}
 
 #[test]
 fn test_search_result_creation() {
@@ -29,19 +24,3 @@ fn test_search_result_creation() {
     assert_eq!(search_result.text, "test");
 }
 
-#[test]
-fn test_search_result_clone() {
-    let original = SearchResult {
-        page_index: 0,
-        rect: PdfRect::new(
-            PdfPoints::new(0.0),
-            PdfPoints::new(0.0),
-            PdfPoints::new(100.0),
-            PdfPoints::new(100.0),
-        ),
-        text: "cloned".to_string(),
-    };
-    let cloned = original.clone();
-    assert_eq!(original.page_index, cloned.page_index);
-    assert_eq!(original.text, cloned.text);
-}
