@@ -213,7 +213,6 @@ impl EditorPage {
                     } else {
                         "❌ An error occurred while rendering the PDF:"
                     };
-                    
                     ui.colored_label(egui::Color32::RED, title);
                     ui.add_space(8.0);
 
@@ -224,10 +223,8 @@ impl EditorPage {
                         .show(ui, |ui| {
                             ui.label(&self.pdf_error_message);
                         });
-                    
                     ui.add_space(12.0);
                     ui.label("This may be caused by:");
-                    
                     if self.is_document_conversion_error {
                         // Check if the error message indicates a PDFium issue
                         if self.pdf_error_message.contains("PDFium") || self.pdf_error_message.contains("pdfium") {
@@ -246,7 +243,6 @@ impl EditorPage {
                         ui.label("  • Corrupted PDF file");
                         ui.label("  • Incompatible PDF format");
                     }
-                    
                     ui.add_space(12.0);
                     if ui.button("OK").clicked() {
                         self.show_pdf_error_dialog = false;
