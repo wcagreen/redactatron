@@ -525,7 +525,8 @@ impl EditorPage {
         ui.heading("Redaction");
 
         let current_file = &self.files[self.current_file_index];
-        let redactions_for_current = if self.is_pdf(current_file) {
+        let has_pdf_loaded = self.pdf_state.pdf_engine.is_some();
+        let redactions_for_current = if has_pdf_loaded {
             self.redaction_areas
                 .iter()
                 .filter(|r| {
@@ -566,7 +567,7 @@ impl EditorPage {
         ui.add_space(10.0);
 
         if ui.button("Clear Current Page").clicked() {
-            if self.is_pdf(current_file) {
+            if has_pdf_loaded {
                 self.redaction_areas.retain(|r| {
                     &r.file_path != current_file
                         || r.page_index != Some(self.pdf_state.current_pdf_page)
@@ -885,7 +886,9 @@ impl EditorPage {
     ) {
         self.hovered_redaction = None;
 
-        let current_page = if self.is_pdf(file_path) {
+        // Check if we have a PDF loaded (either native PDF or converted from document)
+        let has_pdf_loaded = self.pdf_state.pdf_engine.is_some();
+        let current_page = if has_pdf_loaded {
             Some(self.pdf_state.current_pdf_page)
         } else {
             None
@@ -1029,13 +1032,16 @@ impl EditorPage {
         let height = (normalized_end.y - normalized_start.y).abs();
 
         if width > 0.01 && height > 0.01 {
+            // Check if we have a PDF loaded (either native PDF or converted from document)
+            let has_pdf_loaded = self.pdf_state.pdf_engine.is_some();
+            
             self.redaction_areas.push(RedactionArea {
                 x: min_x,
                 y: min_y,
                 width,
                 height,
                 file_path: file_path.clone(),
-                page_index: if self.is_pdf(file_path) {
+                page_index: if has_pdf_loaded {
                     Some(self.pdf_state.current_pdf_page)
                 } else {
                     None
