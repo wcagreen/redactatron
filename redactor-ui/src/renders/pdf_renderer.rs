@@ -1,7 +1,7 @@
-use redactor_core::processors::pdf::PdfEngine;
-use std::path::PathBuf;
 use eframe::egui;
+use redactor_core::processors::pdf::PdfEngine;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 pub struct PdfRenderState {
     pub pdf_engine: Option<PdfEngine>,
@@ -17,11 +17,10 @@ impl PdfRenderState {
             current_pdf_page: 0,
             pdf_page_count: 0,
             pdf_error_message: None,
-
         }
     }
 
-    pub fn load_file(&mut self, file_path: &PathBuf) -> bool {
+    pub fn load_file(&mut self, file_path: &Path) -> bool {
         let mut engine = PdfEngine::new();
         match engine.load_file(&file_path.to_string_lossy()) {
             Ok(_) => {
@@ -34,7 +33,7 @@ impl PdfRenderState {
             Err(e) => {
                 self.pdf_error_message = Some(e.to_string());
                 false
-            },
+            }
         }
     }
 
@@ -50,10 +49,11 @@ pub struct PdfRenderResult {
     pub response: egui::Response,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_pdf(
     pdf_state: &mut PdfRenderState,
     ui: &mut egui::Ui,
-    file_path: &PathBuf,
+    file_path: &Path,
     ctx: &egui::Context,
     zoom: &mut f32,
     pan_offset: &mut egui::Vec2,
@@ -61,11 +61,9 @@ pub fn render_pdf(
     texture_cache: &mut HashMap<(PathBuf, u16), egui::TextureHandle>,
 ) -> Option<PdfRenderResult> {
     // Initialize PDF engine if needed
-    if pdf_state.pdf_engine.is_none() {
-        if !pdf_state.load_file(file_path) {
-            ui.colored_label(egui::Color32::RED, "Failed to load PDF");
-            return None;
-        }
+    if pdf_state.pdf_engine.is_none() && !pdf_state.load_file(file_path) {
+        ui.colored_label(egui::Color32::RED, "Failed to load PDF");
+        return None;
     }
 
     let page_count = pdf_state.pdf_page_count;
@@ -121,38 +119,35 @@ pub fn render_pdf(
         ui.separator();
 
         // Render PDF page
-        let cache_key = (file_path.clone(), pdf_state.current_pdf_page);
+        let cache_key = (file_path.to_path_buf(), pdf_state.current_pdf_page);
 
-        if !texture_cache.contains_key(&cache_key) {
-            if let Some(engine) = &pdf_state.pdf_engine {
-                match engine.render_page(pdf_state.current_pdf_page, 2.0) {
-                    Ok(img) => {
-                        let img_rgba = img.to_rgba8();
-                        let size = [img_rgba.width() as _, img_rgba.height() as _];
-                        let pixels = img_rgba.as_flat_samples();
+        if !texture_cache.contains_key(&cache_key)
+            && let Some(engine) = &pdf_state.pdf_engine
+        {
+            match engine.render_page(pdf_state.current_pdf_page, 2.0) {
+                Ok(img) => {
+                    let img_rgba = img.to_rgba8();
+                    let size = [img_rgba.width() as _, img_rgba.height() as _];
+                    let pixels = img_rgba.as_flat_samples();
 
-                        let color_image =
-                            egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+                    let color_image =
+                        egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
 
-                        let texture = ctx.load_texture(
-                            format!(
-                                "{}_{}",
-                                file_path.to_string_lossy(),
-                                pdf_state.current_pdf_page
-                            ),
-                            color_image,
-                            Default::default(),
-                        );
+                    let texture = ctx.load_texture(
+                        format!(
+                            "{}_{}",
+                            file_path.to_string_lossy(),
+                            pdf_state.current_pdf_page
+                        ),
+                        color_image,
+                        Default::default(),
+                    );
 
-                        texture_cache.insert(cache_key.clone(), texture);
-                    }
-                    Err(e) => {
-                        ui.colored_label(
-                            egui::Color32::RED,
-                            format!("Failed to render page: {}", e),
-                        );
-                        return None;
-                    }
+                    texture_cache.insert(cache_key.clone(), texture);
+                }
+                Err(e) => {
+                    ui.colored_label(egui::Color32::RED, format!("Failed to render page: {}", e));
+                    return None;
                 }
             }
         }
@@ -165,7 +160,8 @@ pub fn render_pdf(
         } else {
             None
         }
-    }).inner
+    })
+    .inner
 }
 
 pub fn render_pdf_page_with_highlights(
@@ -203,5 +199,3 @@ pub fn render_pdf_page_with_highlights(
         response: response.clone(),
     })
 }
-
-

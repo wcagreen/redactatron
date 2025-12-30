@@ -1,17 +1,23 @@
 use anyhow::{Context, Result};
 use image::DynamicImage;
+use log::{debug, error, info};
 use pdfium_render::prelude::{PdfRect, PdfSearchDirection, PdfSearchOptions, Pdfium};
 use std::cell::RefCell;
-use log::{debug, error, info};
 
 // Thread-local Pdfium instance for PDF processing. This was about annoying to set up, likely better way to do it.
 thread_local! {
-    static PDFIUM: RefCell<Option<Pdfium>> = RefCell::new(None);
+    static PDFIUM: RefCell<Option<Pdfium>> = const { RefCell::new(None) };
 }
 
 pub struct PdfEngine {
     pdf_data: Vec<u8>,
     page_count: u16,
+}
+
+impl Default for PdfEngine {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PdfEngine {
@@ -31,16 +37,19 @@ impl PdfEngine {
             let mut opt = cell.borrow_mut();
             if opt.is_none() {
                 debug!("Initializing PDFium for current thread");
-                let bindings =
-                    Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./"))
-                        .or_else(|_| {
-                            debug!("PDFium library not found locally, attempting to bind to system library");
-                            Pdfium::bind_to_system_library()
-                        })
-                        .map_err(|e| {
-                            error!("Failed to bind PDFium: {}", e);
-                            anyhow::anyhow!("Failed to bind PDFium: {}", e)
-                        })?;
+                let bindings = Pdfium::bind_to_library(
+                    Pdfium::pdfium_platform_library_name_at_path("./"),
+                )
+                .or_else(|_| {
+                    debug!(
+                        "PDFium library not found locally, attempting to bind to system library"
+                    );
+                    Pdfium::bind_to_system_library()
+                })
+                .map_err(|e| {
+                    error!("Failed to bind PDFium: {}", e);
+                    anyhow::anyhow!("Failed to bind PDFium: {}", e)
+                })?;
                 info!("PDFium successfully initialized");
                 *opt = Some(Pdfium::new(bindings));
             } else {
@@ -54,7 +63,10 @@ impl PdfEngine {
         // Storing data in engine to make it portable across threads if needed Likley better way to load the pdf it was bit annoying to figure this out.
         info!("Loading PDF file: {}", path);
         self.pdf_data = std::fs::read(path).context("Failed to read PDF file")?;
-        debug!("PDF file read successfully, size: {} bytes", self.pdf_data.len());
+        debug!(
+            "PDF file read successfully, size: {} bytes",
+            self.pdf_data.len()
+        );
 
         Self::ensure_pdfium(|pdfium| {
             debug!("Loading PDF from byte vector");
@@ -72,14 +84,20 @@ impl PdfEngine {
     }
 
     pub fn render_page(&self, page_index: u16, scale_factor: f32) -> Result<DynamicImage> {
-        debug!("Rendering page {} with scale factor {}", page_index, scale_factor);
+        debug!(
+            "Rendering page {} with scale factor {}",
+            page_index, scale_factor
+        );
         Self::ensure_pdfium(|pdfium| {
             let doc = pdfium.load_pdf_from_byte_vec(self.pdf_data.clone(), None)?;
             let page = doc.pages().get(page_index)?;
 
             let width = (page.width().value * scale_factor) as i32;
             let height = (page.height().value * scale_factor) as i32;
-            debug!("Page {} dimensions: {}x{} pixels", page_index, width, height);
+            debug!(
+                "Page {} dimensions: {}x{} pixels",
+                page_index, width, height
+            );
 
             let image = page.render(width, height, None)?.as_image();
             debug!("Page {} rendered successfully", page_index);
@@ -118,7 +136,11 @@ impl PdfEngine {
                 }
             }
 
-            info!("Search completed, found {} results for term '{}'", results.len(), term);
+            info!(
+                "Search completed, found {} results for term '{}'",
+                results.len(),
+                term
+            );
             Ok(results)
         })
     }

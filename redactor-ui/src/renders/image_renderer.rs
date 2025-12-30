@@ -24,14 +24,10 @@ pub fn render_image(
                 let size = [img_rgba.width() as _, img_rgba.height() as _];
                 let pixels = img_rgba.as_flat_samples();
 
-                let color_image =
-                    egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
+                let color_image = egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
 
-                let texture = ctx.load_texture(
-                    file_path.to_string_lossy(),
-                    color_image,
-                    Default::default(),
-                );
+                let texture =
+                    ctx.load_texture(file_path.to_string_lossy(), color_image, Default::default());
 
                 texture_cache.insert(cache_key.clone(), texture);
             }
@@ -103,7 +99,8 @@ pub fn render_image(
                 image_rect,
                 response: response.clone(),
             })
-        }).inner
+        })
+        .inner
     } else {
         None
     }

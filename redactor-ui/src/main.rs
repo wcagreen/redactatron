@@ -6,10 +6,9 @@ mod views {
 }
 
 mod renders {
-    pub mod pdf_renderer;
     pub mod image_renderer;
+    pub mod pdf_renderer;
 }
-
 
 use redactor_core::utils::logging;
 use views::editor::EditorPage;
@@ -23,7 +22,7 @@ enum AppView {
 
 fn main() -> Result<(), eframe::Error> {
     logging::init();
-    
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_maximized(true),
         ..Default::default()
@@ -97,11 +96,11 @@ impl eframe::App for RedactorApp {
                 }
 
                 // Add back button when in editor view
-                if matches!(self.current_view, AppView::Editor) {
-                    if ui.button("← Back to Home").clicked() {
-                        self.current_view = AppView::Home;
-                        self.editor_page = None;
-                    }
+                if matches!(self.current_view, AppView::Editor)
+                    && ui.button("← Back to Home").clicked()
+                {
+                    self.current_view = AppView::Home;
+                    self.editor_page = None;
                 }
             });
         });
