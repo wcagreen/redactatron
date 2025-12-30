@@ -8,7 +8,7 @@ repository.workspace = true
 description = "UI for Rusty Redactor."
 
 [[bin]]
-name = "Redactatron"
+name = "redactatron"
 path = "src/main.rs"
 
 [dependencies]
