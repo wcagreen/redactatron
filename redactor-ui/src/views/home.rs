@@ -2,18 +2,10 @@ use eframe::egui;
 use log::info;
 use std::path::PathBuf;
 
+#[derive(Default)]
 pub struct HomePage {
     uploaded_files: Vec<PathBuf>,
     drag_hover: bool,
-}
-
-impl Default for HomePage {
-    fn default() -> Self {
-        Self {
-            uploaded_files: Vec::new(),
-            drag_hover: false,
-        }
-    }
 }
 
 impl HomePage {
@@ -57,19 +49,18 @@ impl HomePage {
                     ui.heading("📁 Drag and Drop Files Here");
 
                     // Browse button
-                    if ui.button("📂 Click to Browse").clicked() {
-                        if let Some(paths) = rfd::FileDialog::new()
+                    if ui.button("📂 Click to Browse").clicked()
+                        && let Some(paths) = rfd::FileDialog::new()
                             .add_filter(
                                 "Documents",
                                 &["pdf", "jpg", "jpeg", "png", "gif", "webp", "doc", "docx"],
                             )
                             .add_filter("All Files", &["*"])
                             .pick_files()
-                        {
-                            for path in paths {
-                                info!("Selected file: {}", path.display());
-                                self.uploaded_files.push(path);
-                            }
+                    {
+                        for path in paths {
+                            info!("Selected file: {}", path.display());
+                            self.uploaded_files.push(path);
                         }
                     }
                     ui.add_space(20.0);
@@ -79,7 +70,7 @@ impl HomePage {
             ui.separator();
 
             // Check for dragged files
-            self.drag_hover = ctx.input(|i| i.raw.hovered_files.len() > 0);
+            self.drag_hover = ctx.input(|i| !i.raw.hovered_files.is_empty());
 
             ctx.input(|i| {
                 if !i.raw.dropped_files.is_empty() {

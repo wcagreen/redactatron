@@ -90,10 +90,8 @@ impl DocConverter {
             error!("Expected PDF at: {}", output_pdf_path.display());
             debug!("Temp directory contents:");
             if let Ok(entries) = std::fs::read_dir(temp_path) {
-                for entry in entries {
-                    if let Ok(entry) = entry {
-                        debug!("  - {}", entry.path().display());
-                    }
+                for entry in entries.flatten() {
+                    debug!("  - {}", entry.path().display());
                 }
             }
             return Err(anyhow::anyhow!(

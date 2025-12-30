@@ -6,12 +6,18 @@ use std::cell::RefCell;
 
 // Thread-local Pdfium instance for PDF processing. This was about annoying to set up, likely better way to do it.
 thread_local! {
-    static PDFIUM: RefCell<Option<Pdfium>> = RefCell::new(None);
+    static PDFIUM: RefCell<Option<Pdfium>> = const { RefCell::new(None) };
 }
 
 pub struct PdfEngine {
     pdf_data: Vec<u8>,
     page_count: u16,
+}
+
+impl Default for PdfEngine {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PdfEngine {

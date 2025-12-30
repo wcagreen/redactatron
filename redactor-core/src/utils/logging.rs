@@ -40,14 +40,14 @@ pub fn init() {
     let log_path = get_log_file_path();
 
     // Try to create log directory
-    if let Some(parent) = log_path.parent() {
-        if let Err(e) = fs::create_dir_all(parent) {
-            eprintln!(
-                "Warning: Could not create log directory {}: {}",
-                parent.display(),
-                e
-            );
-        }
+    if let Some(parent) = log_path.parent()
+        && let Err(e) = fs::create_dir_all(parent)
+    {
+        eprintln!(
+            "Warning: Could not create log directory {}: {}",
+            parent.display(),
+            e
+        );
     }
 
     // Configure env_logger to output to file

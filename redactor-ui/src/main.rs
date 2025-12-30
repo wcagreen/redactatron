@@ -96,11 +96,11 @@ impl eframe::App for RedactorApp {
                 }
 
                 // Add back button when in editor view
-                if matches!(self.current_view, AppView::Editor) {
-                    if ui.button("← Back to Home").clicked() {
-                        self.current_view = AppView::Home;
-                        self.editor_page = None;
-                    }
+                if matches!(self.current_view, AppView::Editor)
+                    && ui.button("← Back to Home").clicked()
+                {
+                    self.current_view = AppView::Home;
+                    self.editor_page = None;
                 }
             });
         });

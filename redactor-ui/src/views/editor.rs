@@ -7,7 +7,7 @@ use redactor_core::processors::docs::DocConverter;
 use redactor_core::processors::pdf::SearchResult;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::renders::{
     image_renderer,
@@ -164,10 +164,10 @@ impl EditorPage {
 
                     ui.horizontal(|ui| {
                         if ui.button("Export").clicked() {
-                            if let Some(file) = self.pending_export_file.take() {
-                                if self.redact_and_export_pdf(&file, self.selected_dpi) {
-                                    self.show_export_success_dialog = true;
-                                }
+                            if let Some(file) = self.pending_export_file.take()
+                                && self.redact_and_export_pdf(&file, self.selected_dpi)
+                            {
+                                self.show_export_success_dialog = true;
                             }
                             self.show_dpi_dialog = false;
                         }
@@ -262,8 +262,7 @@ impl EditorPage {
         self.search_results.clear();
         self.search_query.clear();
 
-        self.redaction_areas
-            .retain(|r| &r.file_path != &current_file);
+        self.redaction_areas.retain(|r| r.file_path != current_file);
 
         // Clear texture cache for this file
         self.texture_cache
@@ -368,19 +367,19 @@ impl EditorPage {
     }
 
     fn center_on_search_result(&mut self, result: &SearchResult) {
-        if let Some(engine) = &self.pdf_state.pdf_engine {
-            if let Ok((page_width, page_height)) = engine.get_page_dimensions(result.page_index) {
-                let rect = result.rect;
+        if let Some(engine) = &self.pdf_state.pdf_engine
+            && let Ok((page_width, page_height)) = engine.get_page_dimensions(result.page_index)
+        {
+            let rect = result.rect;
 
-                let cx = rect.left().value as f32 + rect.width().value as f32 / 2.0;
-                let cy = rect.bottom().value as f32 + rect.height().value as f32 / 2.0;
+            let cx = rect.left().value + rect.width().value / 2.0;
+            let cy = rect.bottom().value + rect.height().value / 2.0;
 
-                let nx = cx / page_width as f32;
-                let ny = 1.0 - (cy / page_height as f32);
+            let nx = cx / page_width;
+            let ny = 1.0 - (cy / page_height);
 
-                // negative pan pulls content into view
-                self.pan_offset = egui::vec2(-nx * 500.0 * self.zoom, -ny * 500.0 * self.zoom);
-            }
+            // negative pan pulls content into view
+            self.pan_offset = egui::vec2(-nx * 500.0 * self.zoom, -ny * 500.0 * self.zoom);
         }
     }
 
@@ -503,12 +502,11 @@ impl EditorPage {
         ui.label("Search for keywords:");
         let response = ui.text_edit_singleline(&mut self.search_query);
 
-        if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))
-            || ui.button("🔍 Search").clicked()
+        if (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))
+            || ui.button("🔍 Search").clicked())
+            && !self.search_query.is_empty()
         {
-            if !self.search_query.is_empty() {
-                self.perform_search();
-            }
+            self.perform_search();
         }
 
         ui.add_space(10.0);
@@ -742,7 +740,7 @@ impl EditorPage {
         }
     }
 
-    fn is_pdf(&self, file_path: &PathBuf) -> bool {
+    fn is_pdf(&self, file_path: &Path) -> bool {
         file_path
             .extension()
             .and_then(|e| e.to_str())
@@ -750,7 +748,7 @@ impl EditorPage {
             .unwrap_or(false)
     }
 
-    fn is_document(&self, file_path: &PathBuf) -> bool {
+    fn is_document(&self, file_path: &Path) -> bool {
         file_path
             .extension()
             .and_then(|e| e.to_str())
@@ -761,7 +759,7 @@ impl EditorPage {
             .unwrap_or(false)
     }
 
-    fn convert_and_load_document(&mut self, file_path: &PathBuf) -> anyhow::Result<()> {
+    fn convert_and_load_document(&mut self, file_path: &Path) -> anyhow::Result<()> {
         // Create converter (or reuse existing one for the same file)
         let converter = DocConverter::new().context("Failed to create document converter")?;
         let pdf_path = converter
@@ -812,15 +810,11 @@ impl EditorPage {
                     if let Ok((page_width, page_height)) =
                         engine.get_page_dimensions(self.pdf_state.current_pdf_page)
                     {
-                        let page_width = page_width as f32;
-                        let page_height = page_height as f32;
+                        let width = rect_bounds.width().value;
+                        let height = rect_bounds.height().value;
 
-                        let width = rect_bounds.width().value as f32;
-                        let height = rect_bounds.height().value as f32;
-
-                        let x_norm = rect_bounds.left().value as f32 / page_width;
-                        let y_norm =
-                            1.0 - (rect_bounds.bottom().value as f32 + height) / page_height;
+                        let x_norm = rect_bounds.left().value / page_width;
+                        let y_norm = 1.0 - (rect_bounds.bottom().value + height) / page_height;
                         let width_norm = width / page_width;
                         let height_norm = height / page_height;
 
@@ -867,7 +861,7 @@ impl EditorPage {
                             info_pos,
                             egui::Align2::LEFT_TOP,
                             info_text,
-                            egui::TextStyle::Small.resolve(&ui.style()),
+                            egui::TextStyle::Small.resolve(ui.style()),
                             egui::Color32::WHITE,
                         );
                     }
@@ -913,11 +907,11 @@ impl EditorPage {
                 );
 
                 let mut is_hovered = false;
-                if let Some(pointer_pos) = response.interact_pointer_pos() {
-                    if redact_rect.contains(pointer_pos) {
-                        self.hovered_redaction = Some(idx);
-                        is_hovered = true;
-                    }
+                if let Some(pointer_pos) = response.interact_pointer_pos()
+                    && redact_rect.contains(pointer_pos)
+                {
+                    self.hovered_redaction = Some(idx);
+                    is_hovered = true;
                 }
 
                 ui.painter()
@@ -972,7 +966,7 @@ impl EditorPage {
     fn handle_interaction(
         &mut self,
         ui: &mut egui::Ui,
-        file_path: &PathBuf,
+        file_path: &Path,
         image_rect: &egui::Rect,
         response: &egui::Response,
     ) {
@@ -985,19 +979,17 @@ impl EditorPage {
                 self.drag_start = response.interact_pointer_pos();
             }
 
-            if response.dragged_by(egui::PointerButton::Primary) {
-                if let (Some(start), Some(current)) =
+            if response.dragged_by(egui::PointerButton::Primary)
+                && let (Some(start), Some(current)) =
                     (self.drag_start, response.interact_pointer_pos())
-                {
-                    let preview_rect =
-                        egui::Rect::from_two_pos(start, current).intersect(*image_rect);
-                    ui.painter().rect_stroke(
-                        preview_rect,
-                        0.0,
-                        egui::Stroke::new(2.0, egui::Color32::RED),
-                        StrokeKind::Outside,
-                    );
-                }
+            {
+                let preview_rect = egui::Rect::from_two_pos(start, current).intersect(*image_rect);
+                ui.painter().rect_stroke(
+                    preview_rect,
+                    0.0,
+                    egui::Stroke::new(2.0, egui::Color32::RED),
+                    StrokeKind::Outside,
+                );
             }
 
             if response.drag_stopped_by(egui::PointerButton::Primary) {
@@ -1015,7 +1007,7 @@ impl EditorPage {
         start: egui::Pos2,
         end: egui::Pos2,
         image_rect: &egui::Rect,
-        file_path: &PathBuf,
+        file_path: &Path,
     ) {
         let normalized_start = egui::pos2(
             ((start.x - image_rect.min.x) / image_rect.width()).clamp(0.0, 1.0),
@@ -1034,13 +1026,13 @@ impl EditorPage {
         if width > 0.01 && height > 0.01 {
             // Check if we have a PDF loaded (either native PDF or converted from document)
             let has_pdf_loaded = self.pdf_state.pdf_engine.is_some();
-            
+
             self.redaction_areas.push(RedactionArea {
                 x: min_x,
                 y: min_y,
                 width,
                 height,
-                file_path: file_path.clone(),
+                file_path: file_path.to_path_buf(),
                 page_index: if has_pdf_loaded {
                     Some(self.pdf_state.current_pdf_page)
                 } else {
@@ -1169,7 +1161,7 @@ impl EditorPage {
         let has_redactions = self
             .redaction_areas
             .iter()
-            .any(|r| &r.file_path == &current_file);
+            .any(|r| r.file_path == current_file);
 
         if !has_redactions {
             self.show_no_redactions_dialog = true;
