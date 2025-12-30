@@ -26,6 +26,11 @@ Welcome to Redactatron 9000! This guide will help you navigate the application a
 
 The Home screen is where you begin by loading documents for redaction.
 
+
+![alt text](./screenshots/home_view.png)
+
+
+
 ### Loading Documents
 
 There are two ways to load files:
@@ -41,6 +46,9 @@ There are two ways to load files:
 - Supported formats:
   - **Documents**: .pdf, .docx (Word documents)
   - **Images**: .jpg, .jpeg, .png, .gif, .webp
+
+![alt text](./screenshots/editor_view.png)
+
 
 ### Starting Redaction
 
@@ -96,6 +104,13 @@ The left sidebar provides file management, search functionality, and redaction c
 
 **Export Redacted Document** 💾:
 - Saves your redacted file (see [Exporting Redacted Files](#exporting-redacted-files))
+
+
+
+![alt text](./screenshots/redaction.png)
+
+
+
 
 ### Main Viewer
 

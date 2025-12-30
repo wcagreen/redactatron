@@ -17,8 +17,6 @@ impl Default for HomePage {
 }
 
 impl HomePage {
-    /// Update the home page UI
-    /// Returns Some(files) when user clicks Submit, None otherwise
     pub fn update(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) -> Option<Vec<PathBuf>> {
         let mut submitted_files = None;
 
@@ -30,13 +28,12 @@ impl HomePage {
             );
             ui.label("Redact sensitive information from documents");
             ui.horizontal(|ui| {
-                // TODO replace with actual links
                 ui.hyperlink_to(
                     "Documentation",
-                    "https://github.com/wcagreen/rusty-redactor",
+                    "https://github.com/wcagreen/redactatron/docs/ui.md",
                 );
                 ui.separator();
-                ui.hyperlink_to("GitHub", "https://github.com/wcagreen/rusty-redactor");
+                ui.hyperlink_to("GitHub", "https://github.com/wcagreen/redactatron");
             });
             ui.separator();
 
