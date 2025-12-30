@@ -1,6 +1,6 @@
 # Redactatron
 
-A Rust-based document redaction desktop application that helps you safely remove sensitive information from PDFs, Word documents, and images. Redactatron provides an intuitive graphical user interface for redacting documents with precision.
+A Rust-based document redaction desktop application that helps you safely remove sensitive information from PDFs, Word documents, and images. Redactatron provides an intuitive graphical user interface for redacting documents with precision. I made this because I wanted to explore UI in rust, learn about redaction and how to make a software do it.
 
 ![alt text](./docs/screenshots/readme_home_image.png)
 
