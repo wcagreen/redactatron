@@ -80,10 +80,6 @@ impl Default for RedactorApp {
 
 impl eframe::App for RedactorApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Handle window close button
-        if ctx.input(|i| i.viewport().close_requested()) {
-            std::process::exit(0);
-        }
 
         // Top panel with title and about button
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
